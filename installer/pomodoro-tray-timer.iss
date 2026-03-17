@@ -11,16 +11,19 @@ Compression=lzma
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
+SetupIconFile=..\assets\icon-red-tomato.ico
+UninstallDisplayIcon={app}\icon-red-tomato.ico
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务"; Flags: unchecked
 
 [Files]
 Source: "..\dist\pomodoro-tray-timer\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\assets\icon-red-tomato.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Pomodoro Tray Timer"; Filename: "{app}\pomodoro-tray-timer.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\Pomodoro Tray Timer"; Filename: "{app}\pomodoro-tray-timer.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\Pomodoro Tray Timer"; Filename: "{app}\pomodoro-tray-timer.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon-red-tomato.ico"
+Name: "{autodesktop}\Pomodoro Tray Timer"; Filename: "{app}\pomodoro-tray-timer.exe"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\icon-red-tomato.ico"
 
 [Run]
 Filename: "{app}\pomodoro-tray-timer.exe"; Description: "启动 Pomodoro Tray Timer"; Flags: nowait postinstall skipifsilent
