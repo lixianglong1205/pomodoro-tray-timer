@@ -14,6 +14,7 @@ class AppConfig:
     focus_minutes: int
     short_break_minutes: int
     long_break_minutes: int
+    long_break_every_focus: int
 
     @classmethod
     def from_timer_config(cls, config: TimerConfig) -> "AppConfig":
@@ -21,6 +22,7 @@ class AppConfig:
             focus_minutes=config.focus_minutes,
             short_break_minutes=config.short_break_minutes,
             long_break_minutes=config.long_break_minutes,
+            long_break_every_focus=config.long_break_every_focus,
         )
 
     def to_timer_config(self) -> TimerConfig:
@@ -28,6 +30,7 @@ class AppConfig:
             focus_minutes=self.focus_minutes,
             short_break_minutes=self.short_break_minutes,
             long_break_minutes=self.long_break_minutes,
+            long_break_every_focus=self.long_break_every_focus,
         )
         cfg.validate()
         return cfg
@@ -65,10 +68,12 @@ def load_config(path: Path | None = None) -> AppConfig:
 
     try:
         data = _coerce_dict(raw)
+        defaults = default_config()
         cfg = AppConfig(
             focus_minutes=_as_pos_int(data.get("focus_minutes")),
             short_break_minutes=_as_pos_int(data.get("short_break_minutes")),
             long_break_minutes=_as_pos_int(data.get("long_break_minutes")),
+            long_break_every_focus=_as_pos_int(data.get("long_break_every_focus", defaults.long_break_every_focus)),
         )
         cfg.to_timer_config()
         return cfg
@@ -87,6 +92,7 @@ def save_config(config: AppConfig, path: Path | None = None) -> None:
         "focus_minutes": config.focus_minutes,
         "short_break_minutes": config.short_break_minutes,
         "long_break_minutes": config.long_break_minutes,
+        "long_break_every_focus": config.long_break_every_focus,
     }
     p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 

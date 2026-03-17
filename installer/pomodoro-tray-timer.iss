@@ -1,6 +1,7 @@
 [Setup]
 AppId={{9A6D1269-9955-4E32-9ACF-4E47F4E7B0F3}
 AppName=Pomodoro Tray Timer
+AppVerName=Pomodoro Tray Timer
 AppVersion=0.1.0
 AppPublisher=Pomodoro Tray Timer
 DefaultDirName={pf}\pomodoro-tray-timer

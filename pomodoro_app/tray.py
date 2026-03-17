@@ -57,7 +57,7 @@ def _agent_log(*, run_id: str, hypothesis_id: str, location: str, message: str, 
 class TrayTheme:
     focus_bg: QColor = field(default_factory=lambda: QColor("#D7263D"))
     break_bg: QColor = field(default_factory=lambda: QColor("#2E8B57"))
-    idle_bg: QColor = field(default_factory=lambda: QColor("#4B5563"))
+    idle_bg: QColor = field(default_factory=lambda: QColor("#FFA631"))
     text: QColor = field(default_factory=lambda: QColor("#FFFFFF"))
     outline: QColor = field(default_factory=lambda: QColor("#111827"))
 
@@ -314,7 +314,7 @@ class TrayController(QObject):
         painter.drawPath(body_path)
 
         # Leaves (simple 3-lobe crown)
-        leaf_fill = QColor("#166534")  # dark green for contrast on red/green/white
+        leaf_fill = QColor("#00BC12")
         leaf_pen = QPen(self._theme.outline, max(1.0, stroke * 0.85))
         leaf_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         leaf_pen.setCapStyle(Qt.PenCapStyle.RoundCap)

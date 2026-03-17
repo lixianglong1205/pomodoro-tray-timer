@@ -173,11 +173,15 @@ class TimerEngine(QObject):
             self._pending_phase = None
             self.phase_changed.emit(self.phase_run)
             return
+        phase_before_stop = self._phase
         self._timer.stop()
         was_paused = self._paused
         self._paused = False
         self._phase = Phase.idle
-        self._pending_phase = None
+        if phase_before_stop in (Phase.short_break, Phase.long_break):
+            self._pending_phase = phase_before_stop
+        else:
+            self._pending_phase = None
         self._started_at = None
         self._total_seconds = 0
         self._remaining_seconds = 0

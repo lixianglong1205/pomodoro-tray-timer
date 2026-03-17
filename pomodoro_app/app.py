@@ -65,7 +65,7 @@ def run() -> int:
         else:
             title = "阶段结束"
 
-        next_phase = engine.phase
+        next_phase = engine.pending_phase or engine.next_suggested_phase()
         if next_phase == Phase.focus:
             message = "下一阶段：集中精力"
         elif next_phase == Phase.short_break:
