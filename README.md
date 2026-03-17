@@ -5,8 +5,12 @@
 ## 功能说明
 
 - **系统托盘常驻**
-  - 专注/休息阶段通过托盘图标展示剩余 **分钟**（每分钟刷新一次）
-  - 专注阶段图标偏红色，休息阶段图标偏绿色（便于一眼区分）
+  - 托盘图标为**运行时动态绘制**（不是静态 `.ico/.png` 资源）
+  - 图标主体是“**番茄**”造型，并在番茄上叠加显示剩余 **分钟**（每分钟刷新一次）
+  - 叶子为绿色 `#00BC12`
+  - **空闲/待开始**：显示**黄色番茄** `#FFA631`（不显示分钟数字）
+  - **专注阶段**：番茄偏红色；**休息阶段**：番茄偏绿色（便于一眼区分）
+  - **暂停中**：番茄右上角显示暂停徽章（用于快速识别暂停状态）
   - 鼠标悬停托盘图标显示当前阶段与剩余时间等提示信息
   - 阶段结束后应用会进入 **空闲/待开始**，不会自动进入并开始下一阶段
   - 空闲/待开始时，托盘提示信息会显示“下一阶段”（建议的下一阶段）
@@ -14,9 +18,10 @@
     - 运行中（倒计时在走）→ **暂停**
     - 已暂停 → **继续**
     - 空闲/待开始：若存在“下一阶段”提示 → **开始下一阶段**；否则 → **开始集中精力**
+    - （补充）若你在**短休息/长休息**阶段通过右键菜单「**终止时钟**」提前终止休息：应用会回到空闲，但会把“下一阶段”设为**刚刚终止的那种休息**；因此**下一次左键**会**重新开始同一种休息**（短休/长休），而不是进入专注
 - **右键菜单快捷操作**
   - 暂停 / 继续（文案随状态动态切换）
-  - 终止时钟
+  - 终止时钟（运行中可用；在休息中终止后，下一次左键会重开该休息）
   - 开始集中精力
   - 开始短暂休息
   - 开始长时间休息
@@ -45,6 +50,7 @@
 - **集中精力分钟数**
 - **短暂休息分钟数**
 - **长休息分钟数**
+- **长休触发频率**：每完成 **n** 次“集中精力”后，下一次休息进入“长时间休息”（默认 n=4）
 
 保存后会**立即生效**（下一次开始/切换阶段将使用新时长）。配置会持久化到本地 JSON 文件，下次启动自动加载。
 
@@ -74,6 +80,7 @@ uv run python main.py
 另外，阶段结束后会进入空闲/待开始：
 
 - **左键单击托盘图标**：优先开始“下一阶段”（若有提示）；否则开始“集中精力”
+  - 其中，“下一阶段”不仅会在**自然结束**后出现；如果你在**短休/长休**阶段用右键「终止时钟」提前终止休息，下一次左键会**重开同一种休息**
 - **运行中/暂停中左键单击**：可在“暂停 / 继续”之间切换（暂停时倒计时停止）
 
 ## 运行时数据目录（重要）
@@ -116,7 +123,7 @@ uv run python main.py
 ### 默认位置
 
 - **配置路径**：默认写入 `%APPDATA%\pomodoro-tray-timer\config.json`；若安装器设置了 `DataDir`，则写入 `DataDir\config.json`
-- 若文件不存在或内容格式不正确：会回退为默认值（25/5/15）。
+- 若文件不存在或内容格式不正确：会回退为默认值（25/5/15，且长休触发频率默认 4）。
 
 ### 字段定义
 
@@ -124,15 +131,17 @@ uv run python main.py
 {
   "focus_minutes": 25,
   "short_break_minutes": 5,
-  "long_break_minutes": 15
+  "long_break_minutes": 15,
+  "long_break_every_focus": 4
 }
 ```
 
 - **focus_minutes**：集中精力分钟数（正整数）
 - **short_break_minutes**：短暂休息分钟数（正整数）
 - **long_break_minutes**：长休息分钟数（正整数）
+- **long_break_every_focus**：长休触发频率（正整数）。表示每完成 **n** 次“集中精力”后，下一次休息进入“长休息”（默认 4）
 
-你也可以在应用退出时手动编辑该文件，但请确保三项都是**正整数**，否则会被当作无效配置并回退默认值。
+你也可以在应用退出时手动编辑该文件，但请确保各字段都是**正整数**，否则会被当作无效配置并回退默认值。
 
 ## Windows 打包与安装（Nuitka + Inno Setup）
 
@@ -151,6 +160,33 @@ uv run python main.py
   - 资产名：`pomodoro-tray-timer-setup-<tag>.exe`（例如 `pomodoro-tray-timer-setup-v0.1.0.exe`）
 
 触发工作流文件：`.github/workflows/release-windows.yml`（`on: push: tags: ["v*"]`）。
+
+#### CI 产物在哪里（Actions / Releases）
+
+- **Actions 的构建产物（Artifacts）**：
+  - 在 GitHub 仓库页面进入 **Actions** → 打开对应 tag 的 workflow run
+  - 你会看到上传的构建产物（artifact），其中包含：
+    - `dist/pomodoro-tray-timer/**`（one-dir 可运行目录）
+    - `dist-installer/pomodoro-tray-timer-setup.exe`（安装器 exe，未改名的原始产物）
+- **最终对外发布的安装器（Releases）**：
+  - workflow 会创建/更新同名 tag 的 GitHub Release，并上传重命名后的资产：
+    - `pomodoro-tray-timer-setup-<tag>.exe`
+
+#### CI 里 Inno Setup 是怎么用的（ISCC / .iss）
+
+- **Inno Setup 脚本**：`installer/pomodoro-tray-timer.iss`
+- **编译方式**：CI 会安装 Inno Setup，并使用其命令行编译器 **ISCC.exe** 编译 `.iss` 生成安装器
+- **关键输入/输出路径约定**：
+  - `.iss` 会引用 one-dir 产物目录 `dist/pomodoro-tray-timer/`（因此 **必须先成功打包**，再编译安装器）
+  - 编译输出默认写到 `dist-installer/` 下
+
+#### CI 常见失败点（快速自查）
+
+- **找不到 `installer/pomodoro-tray-timer.iss`**：说明仓库内容/路径不匹配（检查是否改名或移动）
+- **找不到 `dist/pomodoro-tray-timer/`**：说明 Nuitka 打包没产出 one-dir（先看前面的 build step 日志）
+- **ISCC 诊断命令返回非 0**：
+  - 在某些环境里执行 `ISCC /?` 可能返回非 0（即使只是输出帮助/诊断信息）
+  - 如果你在 workflow 里增加了类似“ISCC diagnostics”的步骤，请确保该诊断步骤不会因为退出码导致整个 job 失败（详见 `.github/workflows/release-windows.yml`）
 
 #### 如何发布（打 tag 并触发 CI）
 
@@ -218,6 +254,14 @@ git push --tags
 
 - `dist-installer\pomodoro-tray-timer-setup.exe`
 
+#### 卸载列表显示名（AppVerName / AppVersion）
+
+Windows 的“应用和功能 / 程序和功能”卸载列表里显示的名称由 Inno Setup 的 **`AppVerName`** 控制。
+
+- **默认行为**：如果 `.iss` 的 `[Setup]` 段只设置了 `AppName` 和 `AppVersion`，但没有显式设置 `AppVerName`，Inno Setup 会把卸载显示名拼成 `AppName version AppVersion`（例如 `Pomodoro Tray Timer version 0.1.0`）。
+- **推荐做法**：显式设置 `AppVerName=Pomodoro Tray Timer`，即可让卸载列表显示为 `Pomodoro Tray Timer`（不再附带 `version ...`）。
+- **为何仍保留 `AppVersion`**：`AppVersion` 仍用于安装器内部的版本标识（升级/卸载匹配、同 AppId 的版本比较等场景），与“卸载列表展示名”是两件事，保留它不会影响卸载项显示名的定制。
+
 #### 本地从零构建（推荐顺序）
 
 如果你希望在本机从依赖安装开始完整构建一遍（便于排查环境问题），建议按下面顺序：
@@ -234,10 +278,12 @@ uv sync --all-groups
 - **创建快捷方式**：
   - 开始菜单：默认创建
   - 桌面：可选（安装向导里勾选“创建桌面快捷方式”）
+  - 快捷方式图标：使用 `assets/` 下提供的“**红番茄 + 绿叶**”`.ico` 资源（静态图标，不叠加数字、不随阶段变色）
 - **引导选择“数据保存目录”**（关键）：
   - 安装向导会让你选择 `config.json` / `history.csv` 的保存位置（默认：`%APPDATA%\pomodoro-tray-timer\data`）
   - 选择结果会写入：`%APPDATA%\pomodoro-tray-timer\settings.ini`
   - 程序启动时会读取该 `settings.ini` 的 `DataDir`，并把数据写到你选择的位置
+  - （补充）安装器/快捷方式使用的静态 `.ico` 是“红番茄 + 绿叶”，其中叶子为绿色 `#00BC12`
 
 ### 常见坑与排查
 
@@ -353,4 +399,5 @@ CSV 表头在代码中固定为：
 - `pomodoro_app/`：核心代码
 - `scripts/`：构建脚本（Windows 打包/安装器）
 - `installer/`：Inno Setup 安装器脚本（`.iss`）
+- `assets/`：静态资源（例如安装器/桌面快捷方式使用的 `.ico` 图标）
 - `data/`：**旧版本**运行时数据目录（当前版本默认改为写入 `%APPDATA%\pomodoro-tray-timer\`）

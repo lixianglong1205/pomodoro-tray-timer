@@ -7,7 +7,8 @@ import time
 import uuid
 
 from PySide6.QtCore import QObject, Qt, Slot
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QRectF
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from .paths import app_root_dir
@@ -56,7 +57,7 @@ def _agent_log(*, run_id: str, hypothesis_id: str, location: str, message: str, 
 class TrayTheme:
     focus_bg: QColor = field(default_factory=lambda: QColor("#D7263D"))
     break_bg: QColor = field(default_factory=lambda: QColor("#2E8B57"))
-    idle_bg: QColor = field(default_factory=lambda: QColor("#4B5563"))
+    idle_bg: QColor = field(default_factory=lambda: QColor("#FFA631"))
     text: QColor = field(default_factory=lambda: QColor("#FFFFFF"))
     outline: QColor = field(default_factory=lambda: QColor("#111827"))
 
@@ -246,25 +247,98 @@ class TrayController(QObject):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        painter.setBrush(bg)
-        painter.setPen(QPen(self._theme.outline, max(2, self._icon_size // 32)))
-        pad = max(4, self._icon_size // 16)
-        painter.drawRoundedRect(pad, pad, self._icon_size - pad * 2, self._icon_size - pad * 2, pad * 2, pad * 2)
+        fruit_rect = self._draw_tomato(painter, fill=bg)
 
         if minutes is not None:
             text = "99+" if minutes >= 100 else str(minutes)
             font = QFont()
             font.setBold(True)
-            font.setPixelSize(int(self._icon_size * 0.55))
+            font.setPixelSize(self._suggest_minutes_font_px(minutes))
             painter.setFont(font)
-            painter.setPen(self._theme.text)
-            painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, text)
+            painter.setPen(self._theme.text if phase != Phase.idle else self._theme.outline)
+            painter.drawText(fruit_rect.toRect(), Qt.AlignmentFlag.AlignCenter, text)
 
         if paused and phase != Phase.idle:
             self._draw_pause_badge(painter)
 
         painter.end()
         return QIcon(pixmap)
+
+    def _suggest_minutes_font_px(self, minutes: int) -> int:
+        # Keep digits readable at 16/24/32px tray sizes.
+        size = self._icon_size
+        if minutes >= 100:
+            scale = 0.40
+        elif minutes >= 10:
+            scale = 0.50
+        else:
+            scale = 0.56
+        # Slightly larger floor so "1" doesn't look too tiny at 16px.
+        return max(9 if size <= 16 else 8, int(size * scale))
+
+    def _draw_tomato(self, painter: QPainter, *, fill: QColor) -> QRectF:
+        """
+        Draw a stylized tomato (fruit + leaves).
+        Returns the fruit rect for centering the minute digits.
+        """
+        size = float(self._icon_size)
+        # Calibrated for common tray sizes (16/24/32) while still looking decent at 128.
+        stroke = float(max(1, int(round(size / 32))))
+        pad = float(max(1, int(round(size / 14))))
+
+        # Allocate some vertical space for leaves so the fruit stays centered-ish.
+        leaf_h = max(4.0, size * 0.20)
+        leaf_w = max(7.0, size * 0.42)
+        leaf_top = pad + stroke / 2
+
+        fruit_left = pad + stroke / 2
+        fruit_right = size - pad - stroke / 2
+        fruit_top = leaf_top + leaf_h * 0.60
+        fruit_bottom = size - pad - stroke / 2
+        fruit_w = max(1.0, fruit_right - fruit_left)
+        fruit_h = max(1.0, fruit_bottom - fruit_top)
+        fruit_rect = QRectF(fruit_left, fruit_top, fruit_w, fruit_h)
+
+        outline_pen = QPen(self._theme.outline, max(1.0, stroke))
+        outline_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        outline_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        # Fruit body
+        painter.setBrush(fill)
+        painter.setPen(outline_pen)
+        body_path = QPainterPath()
+        body_path.addEllipse(fruit_rect)
+        painter.drawPath(body_path)
+
+        # Leaves (simple 3-lobe crown)
+        leaf_fill = QColor("#00BC12")
+        leaf_pen = QPen(self._theme.outline, max(1.0, stroke * 0.85))
+        leaf_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        leaf_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setBrush(leaf_fill)
+        painter.setPen(leaf_pen)
+
+        cx = size / 2
+        crown_y = leaf_top + leaf_h * 0.85
+        lobe_r = max(1.8, leaf_h * 0.26)
+        # Left lobe
+        painter.drawEllipse(QRectF(cx - leaf_w * 0.22 - lobe_r, crown_y - lobe_r, lobe_r * 2, lobe_r * 2))
+        # Center lobe
+        painter.drawEllipse(QRectF(cx - lobe_r, crown_y - lobe_r * 1.05, lobe_r * 2, lobe_r * 2))
+        # Right lobe
+        painter.drawEllipse(QRectF(cx + leaf_w * 0.22 - lobe_r, crown_y - lobe_r, lobe_r * 2, lobe_r * 2))
+
+        # Small stem
+        stem_w = max(2.0, leaf_w * 0.12)
+        stem_h = max(3.0, leaf_h * 0.40)
+        stem_rect = QRectF(cx - stem_w / 2, leaf_top + leaf_h * 0.15, stem_w, stem_h)
+        painter.drawRoundedRect(stem_rect, stem_w * 0.4, stem_w * 0.4)
+
+        painter.restore()
+        return fruit_rect
 
     def _draw_pause_badge(self, painter: QPainter) -> None:
         # top-right badge with "||"
