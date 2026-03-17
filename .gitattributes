@@ -1,0 +1,6 @@
+* text=auto eol=lf
+
+# Keep Windows-specific scripts with CRLF if they exist in repo.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
