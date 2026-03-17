@@ -77,10 +77,16 @@ jobs:
           }
           if ($iscc) {
             Write-Host "ISCC /? output:"
-            & $iscc /? | Out-Host
+            & $iscc /? 2>&1 | Out-Host
+            $global:LASTEXITCODE = 0
           } else {
             Write-Host "ISCC.exe not found after installation."
           }
+
+          $issPath = "installer/pomodoro-tray-timer.iss"
+          $distDir = "dist/pomodoro-tray-timer"
+          Write-Host ("Precheck: Test-Path {0} => {1}" -f $issPath, (Test-Path $issPath))
+          Write-Host ("Precheck: Test-Path {0} => {1}" -f $distDir, (Test-Path $distDir))
 
       - name: Build installer (Inno Setup)
         shell: pwsh

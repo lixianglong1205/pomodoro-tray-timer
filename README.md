@@ -152,6 +152,33 @@ uv run python main.py
 
 触发工作流文件：`.github/workflows/release-windows.yml`（`on: push: tags: ["v*"]`）。
 
+#### CI 产物在哪里（Actions / Releases）
+
+- **Actions 的构建产物（Artifacts）**：
+  - 在 GitHub 仓库页面进入 **Actions** → 打开对应 tag 的 workflow run
+  - 你会看到上传的构建产物（artifact），其中包含：
+    - `dist/pomodoro-tray-timer/**`（one-dir 可运行目录）
+    - `dist-installer/pomodoro-tray-timer-setup.exe`（安装器 exe，未改名的原始产物）
+- **最终对外发布的安装器（Releases）**：
+  - workflow 会创建/更新同名 tag 的 GitHub Release，并上传重命名后的资产：
+    - `pomodoro-tray-timer-setup-<tag>.exe`
+
+#### CI 里 Inno Setup 是怎么用的（ISCC / .iss）
+
+- **Inno Setup 脚本**：`installer/pomodoro-tray-timer.iss`
+- **编译方式**：CI 会安装 Inno Setup，并使用其命令行编译器 **ISCC.exe** 编译 `.iss` 生成安装器
+- **关键输入/输出路径约定**：
+  - `.iss` 会引用 one-dir 产物目录 `dist/pomodoro-tray-timer/`（因此 **必须先成功打包**，再编译安装器）
+  - 编译输出默认写到 `dist-installer/` 下
+
+#### CI 常见失败点（快速自查）
+
+- **找不到 `installer/pomodoro-tray-timer.iss`**：说明仓库内容/路径不匹配（检查是否改名或移动）
+- **找不到 `dist/pomodoro-tray-timer/`**：说明 Nuitka 打包没产出 one-dir（先看前面的 build step 日志）
+- **ISCC 诊断命令返回非 0**：
+  - 在某些环境里执行 `ISCC /?` 可能返回非 0（即使只是输出帮助/诊断信息）
+  - 如果你在 workflow 里增加了类似“ISCC diagnostics”的步骤，请确保该诊断步骤不会因为退出码导致整个 job 失败（详见 `.github/workflows/release-windows.yml`）
+
 #### 如何发布（打 tag 并触发 CI）
 
 在仓库根目录执行：
