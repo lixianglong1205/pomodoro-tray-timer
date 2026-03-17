@@ -3,8 +3,12 @@ __pycache__/
 *.py[oc]
 build/
 dist/
+dist-installer/
 wheels/
 *.egg-info
+nuitka-crash-report.xml
+*.crash-report.xml
+logs/
 
 # Virtual environments
 .venv

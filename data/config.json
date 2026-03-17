@@ -1,5 +1,5 @@
 {
-  "focus_minutes": 5,
-  "short_break_minutes": 1,
-  "long_break_minutes": 2
+  "focus_minutes": 25,
+  "short_break_minutes": 5,
+  "long_break_minutes": 15
 }

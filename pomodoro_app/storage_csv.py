@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .models import CSV_HEADER, SessionRecord
+from .paths import default_history_path, legacy_history_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,14 +16,25 @@ class DailyStats:
 
 
 class CsvStorage:
-    def __init__(self, csv_path: str | Path = "data/history.csv") -> None:
-        self._path = Path(csv_path)
+    def __init__(self, csv_path: str | Path | None = None) -> None:
+        self._path = Path(csv_path) if csv_path is not None else default_history_path()
 
     @property
     def path(self) -> Path:
         return self._path
 
+    def _migrate_legacy_if_needed(self) -> None:
+        legacy = legacy_history_path()
+        if self._path.exists() or not legacy.exists():
+            return
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._path.write_bytes(legacy.read_bytes())
+        except Exception:
+            return
+
     def ensure_ready(self) -> None:
+        self._migrate_legacy_if_needed()
         self._path.parent.mkdir(parents=True, exist_ok=True)
         if not self._path.exists():
             with self._path.open("w", newline="", encoding="utf-8") as f:

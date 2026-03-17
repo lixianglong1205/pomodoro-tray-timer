@@ -10,14 +10,26 @@ from PySide6.QtCore import QObject, Qt, Slot
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
+from .paths import app_root_dir
 from .timer_engine import Phase, PhaseFinished, PhaseRun, TimerEngine
 
 
 # region agent log
-_AGENT_LOG_PATH = "/mnt/d/project/new_start-073-番茄钟PC软件/.cursor/debug-b1818b.log"
+def _agent_log_enabled() -> bool:
+    return os.environ.get("POMODORO_AGENT_LOG", "").strip() in {"1", "true", "True", "yes", "YES"}
+
+
+def _agent_log_path() -> str:
+    override = os.environ.get("POMODORO_AGENT_LOG_PATH", "").strip()
+    if override:
+        return os.path.expandvars(override)
+    return str(app_root_dir() / "logs" / "agent-debug.log")
 
 
 def _agent_log(*, run_id: str, hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    if not _agent_log_enabled():
+        return
+
     payload = {
         "sessionId": "b1818b",
         "id": f"log_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}",
@@ -29,8 +41,9 @@ def _agent_log(*, run_id: str, hypothesis_id: str, location: str, message: str, 
         "data": data,
     }
     try:
-        os.makedirs(os.path.dirname(_AGENT_LOG_PATH), exist_ok=True)
-        with open(_AGENT_LOG_PATH, "a", encoding="utf-8") as f:
+        path = _agent_log_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(payload, ensure_ascii=False) + "\n")
     except Exception:
         return

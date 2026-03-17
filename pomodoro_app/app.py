@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 import os
 import platform
 import sys
 import time
-import uuid
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
@@ -19,52 +17,7 @@ from .history_window import HistoryWindow
 from .settings_window import SettingsWindow
 
 
-# region agent log
-_AGENT_LOG_PATH = "/mnt/d/project/new_start-073-番茄钟PC软件/.cursor/debug-b1818b.log"
-
-
-def _agent_log(*, run_id: str, hypothesis_id: str, location: str, message: str, data: dict) -> None:
-    payload = {
-        "sessionId": "b1818b",
-        "id": f"log_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}",
-        "timestamp": int(time.time() * 1000),
-        "runId": run_id,
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-    }
-    try:
-        os.makedirs(os.path.dirname(_AGENT_LOG_PATH), exist_ok=True)
-        with open(_AGENT_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        return
-
-
-# endregion
-
-
 def run() -> int:
-    run_id = f"pre-fix_{int(time.time())}"
-    _agent_log(
-        run_id=run_id,
-        hypothesis_id="H1",
-        location="pomodoro_app/app.py:run",
-        message="App starting; capture runtime env",
-        data={
-            "platform_system": platform.system(),
-            "platform_release": platform.release(),
-            "python": sys.version.split()[0],
-            "XDG_CURRENT_DESKTOP": os.environ.get("XDG_CURRENT_DESKTOP"),
-            "XDG_SESSION_TYPE": os.environ.get("XDG_SESSION_TYPE"),
-            "WAYLAND_DISPLAY": os.environ.get("WAYLAND_DISPLAY"),
-            "DISPLAY": os.environ.get("DISPLAY"),
-            "DBUS_SESSION_BUS_ADDRESS_present": bool(os.environ.get("DBUS_SESSION_BUS_ADDRESS")),
-            "WSL_DISTRO_NAME": os.environ.get("WSL_DISTRO_NAME"),
-        },
-    )
-
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
@@ -99,25 +52,8 @@ def run() -> int:
         engine.stop()
         app.quit()
 
-    _agent_log(
-        run_id=run_id,
-        hypothesis_id="H1",
-        location="pomodoro_app/app.py:run",
-        message="Qt system tray availability check",
-        data={
-            "isSystemTrayAvailable": bool(getattr(QSystemTrayIcon, "isSystemTrayAvailable", lambda: False)()),
-        },
-    )
-
     tray = TrayController(engine, on_open_history=on_open_history, on_open_settings=on_open_settings, on_quit=on_quit)
     notifier = Notifier(app_id="PomodoroApp", fallback=tray.show_message)
-    _agent_log(
-        run_id=run_id,
-        hypothesis_id="H2",
-        location="pomodoro_app/app.py:run",
-        message="TrayController created",
-        data={},
-    )
 
     def notify_phase_finished(finished: PhaseFinished) -> None:
         if finished.phase == Phase.focus:
