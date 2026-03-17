@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .timer_engine import TimerConfig
+from .paths import default_config_path, legacy_config_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,11 +38,23 @@ def default_config() -> AppConfig:
 
 
 def config_path() -> Path:
-    return Path("data") / "config.json"
+    return default_config_path()
+
+
+def _migrate_legacy_config_if_needed(target: Path) -> None:
+    legacy = legacy_config_path()
+    if target.exists() or not legacy.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        target.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
+    except Exception:
+        return
 
 
 def load_config(path: Path | None = None) -> AppConfig:
     p = path or config_path()
+    _migrate_legacy_config_if_needed(p)
     if not p.exists():
         return default_config()
 

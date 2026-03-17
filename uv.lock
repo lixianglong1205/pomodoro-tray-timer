@@ -3,6 +3,12 @@ revision = 3
 requires-python = ">=3.12"
 
 [[package]]
+name = "nuitka"
+version = "4.0.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/40/f73e578922084f9e465b30abdb9963aadcc087b5a9399033472d9ef641ab/nuitka-4.0.5.tar.gz", hash = "sha256:45e7d90266e76fe64eeb8d196c17666d7cd7cffbf68d6a24f233c3c03b6feaa8", size = 4420878, upload-time = "2026-03-12T10:03:39.562Z" }
+
+[[package]]
 name = "pomodoro-app"
 version = "0.1.0"
 source = { virtual = "." }
@@ -11,11 +17,19 @@ dependencies = [
     { name = "winotify" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "nuitka" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "pyside6", specifier = ">=6.10.2" },
     { name = "winotify", specifier = ">=1.1.0" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "nuitka", specifier = ">=4.0.5" }]
 
 [[package]]
 name = "pyside6"

@@ -8,3 +8,8 @@ dependencies = [
     "pyside6>=6.10.2",
     "winotify>=1.1.0",
 ]
+
+[dependency-groups]
+dev = [
+    "nuitka>=4.0.5",
+]
