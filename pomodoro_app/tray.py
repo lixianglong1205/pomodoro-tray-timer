@@ -1,56 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import json
-import os
-import time
-import uuid
+import platform
 
-from PySide6.QtCore import QObject, Qt, Slot
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtCore import QRectF
-from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+from PySide6.QtCore import QObject, QRectF, Qt, Slot
+from PySide6.QtGui import QAction, QColor, QCursor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from .paths import app_root_dir
 from .timer_engine import Phase, PhaseFinished, PhaseRun, TimerEngine
-
-
-# region agent log
-def _agent_log_enabled() -> bool:
-    return os.environ.get("POMODORO_AGENT_LOG", "").strip() in {"1", "true", "True", "yes", "YES"}
-
-
-def _agent_log_path() -> str:
-    override = os.environ.get("POMODORO_AGENT_LOG_PATH", "").strip()
-    if override:
-        return os.path.expandvars(override)
-    return str(app_root_dir() / "logs" / "agent-debug.log")
-
-
-def _agent_log(*, run_id: str, hypothesis_id: str, location: str, message: str, data: dict) -> None:
-    if not _agent_log_enabled():
-        return
-
-    payload = {
-        "sessionId": "b1818b",
-        "id": f"log_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}",
-        "timestamp": int(time.time() * 1000),
-        "runId": run_id,
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-    }
-    try:
-        path = _agent_log_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        return
-
-
-# endregion
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,25 +53,16 @@ class TrayController(QObject):
         self._engine = engine
         self._theme = theme or TrayTheme()
         self._icon_size = icon_size
-        self._agent_run_id = f"pre-fix_{int(time.time())}"
+        self._is_macos = platform.system().lower() == "darwin"
 
         self._tray = QSystemTrayIcon(self)
-        _agent_log(
-            run_id=self._agent_run_id,
-            hypothesis_id="H1",
-            location="pomodoro_app/tray.py:TrayController.__init__",
-            message="QSystemTrayIcon created",
-            data={
-                "isSystemTrayAvailable": bool(QSystemTrayIcon.isSystemTrayAvailable()),
-                "supportsMessages": bool(QSystemTrayIcon.supportsMessages()),
-            },
-        )
         self._tray.setToolTip("番茄钟")
         self._tray.setIcon(self._render_icon(minutes=None, phase=Phase.idle, paused=False))
 
         self._tray.activated.connect(self._on_tray_activated)
 
         menu = QMenu()
+        self._menu = menu
         self._act_stop = QAction("终止时钟", menu)
         self._act_pause = QAction("暂停", menu)
         self._act_focus = QAction("开始集中精力", menu)
@@ -138,7 +86,12 @@ class TrayController(QObject):
         menu.addAction(self._act_settings)
         menu.addSeparator()
         menu.addAction(self._act_quit)
-        self._tray.setContextMenu(menu)
+        # 在 macOS 上不调用 setContextMenu：NSStatusItem 一旦绑定原生菜单，
+        # 任何点击（包括左键）都会自动弹菜单，无法区分左右键。
+        # 改为在 _on_tray_activated 里按 reason 手动弹菜单。
+        # Windows / Linux 仍然使用原生上下文菜单以获得最佳体验。
+        if not self._is_macos:
+            self._tray.setContextMenu(menu)
 
         self._act_stop.triggered.connect(self._engine.stop)
         self._act_pause.triggered.connect(self._engine.toggle_pause)
@@ -161,31 +114,7 @@ class TrayController(QObject):
         self._engine.stopped.connect(self._on_stopped)
 
     def show(self) -> None:
-        _agent_log(
-            run_id=self._agent_run_id,
-            hypothesis_id="H2",
-            location="pomodoro_app/tray.py:TrayController.show",
-            message="Tray show() called",
-            data={},
-        )
-        try:
-            self._tray.show()
-            _agent_log(
-                run_id=self._agent_run_id,
-                hypothesis_id="H2",
-                location="pomodoro_app/tray.py:TrayController.show",
-                message="Tray show() returned",
-                data={"visible": bool(self._tray.isVisible())},
-            )
-        except Exception as e:
-            _agent_log(
-                run_id=self._agent_run_id,
-                hypothesis_id="H2",
-                location="pomodoro_app/tray.py:TrayController.show",
-                message="Tray show() raised",
-                data={"exc_type": type(e).__name__, "exc": str(e)},
-            )
-            raise
+        self._tray.show()
         self._refresh(force=True)
 
     def hide(self) -> None:
@@ -378,9 +307,41 @@ class TrayController(QObject):
 
     @Slot(QSystemTrayIcon.ActivationReason)
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        if reason != QSystemTrayIcon.ActivationReason.Trigger:
+        # macOS 上只能以 reason 判断左右键。QApplication.mouseButtons() 在
+        # Accessory + activateIgnoringOtherApps 激活后会把右键事件误标为 LeftButton。
+        # Windows/Linux 的右键菜单由 setContextMenu 原生处理，不会走 Context 分支。
+        if self._is_macos and reason == QSystemTrayIcon.ActivationReason.Context:
+            self._show_context_menu_macos()
             return
-        self._on_left_click()
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
+            self._on_left_click()
+
+    def _show_context_menu_macos(self) -> None:
+        if self._menu is None:
+            return
+
+        # 通过 PyObjC 静默激活当前进程，让 Qt 菜单出现在前台 App 之上。
+        # 前提：进程已设为 NSApplicationActivationPolicyAccessory（见 app.py），
+        # 否则激活会触发 macOS 常规 App 切换动画（闪桌面）。
+        try:
+            from AppKit import NSApplication  # type: ignore
+
+            NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+        except Exception:
+            pass
+
+        # activateIgnoringOtherApps_ 是异步的。若紧接着进入 menu.exec() 的嵌套
+        # 事件循环，macOS 会把第一次菜单项点击当成"激活当前 App 的初始点击"吞掉，
+        # 导致 QAction.triggered 不发射。先同步派发激活相关的 NSEvent 再弹菜单。
+        try:
+            QApplication.processEvents()
+        except Exception:
+            pass
+
+        self._menu.exec(QCursor.pos())
 
     def _on_left_click(self) -> None:
         if self._engine.phase != Phase.idle:

@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import platform
 import sys
-import time
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
@@ -17,9 +16,29 @@ from .history_window import HistoryWindow
 from .settings_window import SettingsWindow
 
 
+def _is_macos() -> bool:
+    return platform.system().lower() == "darwin"
+
+
+def _set_macos_accessory_activation_policy() -> None:
+    """
+    在 macOS 上把进程声明为菜单栏附属 App（等价 Info.plist 里的 LSUIElement=1）。
+    否则 NSApp.activateIgnoringOtherApps 会触发常规 App 切换动画，闪出桌面。
+    """
+    if not _is_macos():
+        return
+    try:
+        from AppKit import NSApplication, NSApplicationActivationPolicyAccessory  # type: ignore
+
+        NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+    except Exception:
+        return
+
+
 def run() -> int:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    _set_macos_accessory_activation_policy()
 
     app_cfg = load_config()
     engine = TimerEngine(config=app_cfg.to_timer_config())
@@ -50,6 +69,11 @@ def run() -> int:
         if tray is not None:
             tray.hide()
         engine.stop()
+        # macOS + Accessory 激活策略 + activateIgnoringOtherApps 场景下，
+        # Qt 的 app.quit() 无法让 NSApp 主 runloop 返回。用户数据已在上方落盘，
+        # 直接 os._exit 以 syscall 级别终止进程，跳过 Qt/NSApp 清理。
+        if _is_macos():
+            os._exit(0)
         app.quit()
 
     tray = TrayController(engine, on_open_history=on_open_history, on_open_settings=on_open_settings, on_quit=on_quit)
@@ -86,7 +110,14 @@ def run() -> int:
     engine.phase_finished.connect(persist_phase_finished)
     tray.show()
 
-    return app.exec()
+    exit_code = app.exec()
+
+    # macOS 上正常退出路径已由 on_quit 的 os._exit 处理；这里作为兜底，
+    # 防止 app.exec 意外返回时挂在 PyObjC/NSRunLoop 清理上。
+    if _is_macos():
+        os._exit(int(exit_code) if exit_code is not None else 0)
+
+    return exit_code
 
 
 if __name__ == "__main__":

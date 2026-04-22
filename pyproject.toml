@@ -5,6 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "pyobjc-core>=12.1",
+    "pyobjc-framework-cocoa>=12.1",
+    "pyobjc-framework-usernotifications>=12.1",
     "pyside6>=6.10.2",
     "winotify>=1.1.0",
 ]

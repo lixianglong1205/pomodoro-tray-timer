@@ -29,10 +29,16 @@
   - 设置...
   - 打开历史记录
   - 退出
+  - **macOS 说明**：NSStatusItem 绑定原生菜单会让任意点击都弹菜单，因此 macOS 下未调用 `setContextMenu`，改为在接收到 `ActivationReason.Context` 时手动弹出；同时将进程设为 `NSApplicationActivationPolicyAccessory`（等价 `LSUIElement=1`）并调用 `activateIgnoringOtherApps_`，使得在其他 App 前台时右键也能把菜单置于最前，且不会闪现桌面
 - **系统通知**
   - 阶段结束（专注/短休/长休）触发 Windows Toast 通知
   - Toast 通知会尝试**跟随系统提示音**播放结束音效（依赖 Windows 通知设置，见下文“通知音效说明/FAQ”）
   - 若 Toast 发送失败，会尽力回退到 Qt 的气泡提示（取决于系统环境）
+  - **macOS 说明（uv 本机运行）**：
+    - 默认通过系统自带 `osascript` 发送 Notification Center 通知（无需额外安装依赖）
+    - **首次发送**通常会弹出权限请求，要求允许“触发通知的宿主”（例如 Terminal / Python 运行环境）发送通知；如果点了拒绝，需要到系统设置里手动打开通知权限
+    - **已知限制**：该方式不支持点击回调/动作；点击通知可能会打开 Script Editor（系统限制）
+    - 如果 macOS 通知发送失败，会回退到 Qt 的 `QSystemTrayIcon.showMessage()` 气泡提示（可见性取决于系统环境）
 - **历史记录（CSV）**
   - 每完成一个阶段写入一行记录（专注/短休/长休）
   - 支持在“历史记录”窗口查看明细与按天汇总（如每日专注次数/专注总分钟）
@@ -58,7 +64,7 @@
 
 ### 环境要求
 
-- **Windows 10/11**
+- **Windows 10/11** 或 **macOS**
 - Python **3.12+**（见 `pyproject.toml` 的 `requires-python`）
 - 依赖由 `uv` 管理（项目已包含 `uv.lock`）
 
