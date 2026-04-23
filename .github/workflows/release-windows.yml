@@ -25,16 +25,14 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
         with:
-          version: "0.11.6"
+          version: "0.11.7"
           enable-cache: true
 
       - name: Print uv version
         run: uv --version
 
-      - name: Select lockfile (Windows)
-        shell: pwsh
-        run: |
-          Copy-Item -Force uv.lock.windows uv.lock
+      - name: Verify lockfile up-to-date
+        run: uv lock --check
 
       - name: Sync dependencies
         run: uv sync --all-groups --locked
