@@ -1,0 +1,114 @@
+name: Release macOS DMG
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    env:
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --all-groups
+
+      - name: Build app (.app, Nuitka)
+        run: |
+          chmod +x ./scripts/build-macos.sh
+          ./scripts/build-macos.sh
+
+      - name: Install create-dmg (Homebrew)
+        run: |
+          set -euo pipefail
+          if brew list create-dmg >/dev/null 2>&1; then
+            brew upgrade create-dmg || true
+          else
+            brew install create-dmg
+          fi
+
+      - name: Build DMG (create-dmg with retry)
+        run: |
+          set -euo pipefail
+          mkdir -p dist-installer
+          rm -rf dist-dmg
+          mkdir -p dist-dmg
+
+          app_path="dist/pomodoro-tray-timer.app"
+          test -d "$app_path"
+          cp -R "$app_path" dist-dmg/
+
+          dmg_path="dist-installer/pomodoro-tray-timer.dmg"
+          rm -f "$dmg_path"
+
+          retry() {
+            local max="$1"
+            shift
+            local i=1
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+
+              if [[ $i -ge $max ]]; then
+                return 1
+              fi
+
+              sleep $((i * 2))
+              i=$((i + 1))
+            done
+          }
+
+          # hdiutil on CI can occasionally fail with "resource busy"; retry helps.
+          retry 3 create-dmg \
+            --volname "Pomodoro Tray Timer" \
+            --app-drop-link 600 185 \
+            "$dmg_path" \
+            "dist-dmg"
+
+          test -f "$dmg_path"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg-${{ github.ref_name }}
+          path: |
+            dist/pomodoro-tray-timer.app/**
+            dist-installer/pomodoro-tray-timer.dmg
+
+      - name: Create/Update GitHub Release and upload DMG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          tag="${TAG_NAME:?TAG_NAME is empty}"
+          dmg_path="dist-installer/pomodoro-tray-timer.dmg"
+          test -f "$dmg_path"
+
+          asset_name="pomodoro-tray-timer-$tag.dmg"
+
+          gh --version
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --notes ""
+          fi
+
+          gh release upload "$tag" "$dmg_path#$asset_name" --clobber
+

@@ -89,17 +89,25 @@ uv run python main.py
   - 其中，“下一阶段”不仅会在**自然结束**后出现；如果你在**短休/长休**阶段用右键「终止时钟」提前终止休息，下一次左键会**重开同一种休息**
 - **运行中/暂停中左键单击**：可在“暂停 / 继续”之间切换（暂停时倒计时停止）
 
+### macOS 运行说明（补充）
+
+- 托盘图标会显示在 **菜单栏（menu bar）**。
+- **首次使用通知**时，系统通常会弹出权限请求，要求允许“触发通知的宿主”（例如 Terminal / Python 运行环境）发送通知；如果点了拒绝，需要到系统设置里手动打开通知权限（见下文“系统通知”的 macOS 说明）。
+- 如果你运行后看不到菜单栏图标：优先检查系统是否隐藏了菜单栏图标、或是否有多个显示器/全屏 App 导致图标被遮挡。
+
 ## 运行时数据目录（重要）
 
 为避免安装到 `C:\Program Files\...` 后因“程序目录不可写”导致配置/历史写入失败，本项目从较新版本起将**运行时数据**默认写入用户目录：
 
-- **基础目录（应用根目录）**：`%APPDATA%\pomodoro-tray-timer\`
+- **Windows（基础目录 / 应用根目录）**：`%APPDATA%\pomodoro-tray-timer\`
+- **macOS（基础目录 / 应用根目录）**：`~/Library/Application Support/pomodoro-tray-timer/`
 - **数据目录（最终写入位置）**：
   - **默认**：若不存在 `settings.ini`，数据目录就是上面的“基础目录”
-  - **安装包版本（可配置）**：若存在 `%APPDATA%\pomodoro-tray-timer\settings.ini`，则读取：
+  - **Windows 安装包版本（可配置）**：若存在 `%APPDATA%\pomodoro-tray-timer\settings.ini`，则读取：
     - `[app]`
     - `DataDir=C:\...\somewhere`
     - 程序会把 `config.json` / `history.csv` 写入该 `DataDir`
+  - **macOS**：当前不使用 `settings.ini` 配置 `DataDir`，默认直接写入 `~/Library/Application Support/pomodoro-tray-timer/`
 
 因此你实际会看到下面两种常见位置之一：
 
@@ -117,18 +125,25 @@ uv run python main.py
 - 若你没有通过安装器配置 `DataDir`：迁移到 `%APPDATA%\pomodoro-tray-timer\`
 - 若你通过安装器配置了 `DataDir`：迁移到 `DataDir\`（例如默认的 `%APPDATA%\pomodoro-tray-timer\data\`）
 
+macOS 下同样会做一次性迁移（如存在旧数据）：
+
+- 从项目相对目录 `data/` 迁移到：`~/Library/Application Support/pomodoro-tray-timer/`
+- 若你曾在类 Unix 的 XDG 目录产生过数据（例如 `~/.local/share/pomodoro-tray-timer/`），也会尽力迁移到上面的 macOS 目录（避免历史/配置丢失）
+
 ## 数据与 CSV 格式定义
 
 ### 默认数据位置
 
-- **CSV 路径**：默认写入 `%APPDATA%\pomodoro-tray-timer\history.csv`；若安装器设置了 `DataDir`，则写入 `DataDir\history.csv`
+- **Windows（CSV 路径）**：默认写入 `%APPDATA%\pomodoro-tray-timer\history.csv`；若安装器设置了 `DataDir`，则写入 `DataDir\history.csv`
+- **macOS（CSV 路径）**：默认写入 `~/Library/Application Support/pomodoro-tray-timer/history.csv`
 - 如果文件不存在，会在首次写入时自动创建，并写入表头。
 
 ## 配置文件（config.json）
 
 ### 默认位置
 
-- **配置路径**：默认写入 `%APPDATA%\pomodoro-tray-timer\config.json`；若安装器设置了 `DataDir`，则写入 `DataDir\config.json`
+- **Windows（配置路径）**：默认写入 `%APPDATA%\pomodoro-tray-timer\config.json`；若安装器设置了 `DataDir`，则写入 `DataDir\config.json`
+- **macOS（配置路径）**：默认写入 `~/Library/Application Support/pomodoro-tray-timer/config.json`
 - 若文件不存在或内容格式不正确：会回退为默认值（25/5/15，且长休触发频率默认 4）。
 
 ### 字段定义
@@ -212,6 +227,46 @@ git push --tags
 #### 去哪里下载安装包
 
 构建完成后，到 GitHub 仓库的 **Releases** 页面下载对应版本的安装包资产（文件名形如 `pomodoro-tray-timer-setup-v0.1.0.exe`）。
+
+## macOS 打包与发布（Nuitka + DMG）
+
+macOS 版本的目标产物是一个可直接分发的 **`.dmg`**（内含 `.app`）。第一阶段默认做 **未签名/未公证** 的发布（无需加入 Apple Developer Program），优先把 CI 流水线跑通；后续可升级为签名/公证以减少 Gatekeeper 阻碍。
+
+更完整的约定（产物路径、Release 资产命名、覆盖策略、以及签名/公证升级点位）见：`docs/macos-release-conventions.md`。
+
+### 通过打 tag 自动构建并发布 DMG（GitHub Actions）
+
+当你推送形如 `v*` 的 tag（例如 `v0.1.0`）到远端后，GitHub Actions 会在 macOS runner 上自动完成：
+
+- 构建 `.app`（Nuitka `--macos-create-app-bundle`）
+- 封装 `.dmg`
+- 自动创建/更新同名 tag 的 GitHub Release，并上传 DMG 资产：
+  - 资产名：`pomodoro-tray-timer-<tag>.dmg`（例如 `pomodoro-tray-timer-v0.1.0.dmg`）
+
+触发工作流文件：`.github/workflows/release-macos.yml`（`on: push: tags: ["v*"]`）。
+
+#### 去哪里下载 DMG
+
+构建完成后，到 GitHub 仓库的 **Releases** 页面下载对应版本的 DMG 资产（文件名形如 `pomodoro-tray-timer-v0.1.0.dmg`）。
+
+### Gatekeeper（未签名/未公证）首次打开说明
+
+未签名/未公证的应用在首次打开时，可能会被 macOS Gatekeeper 拦截或提示“无法验证开发者”。常见的打开方式是：
+
+- 在 Finder 中对 `.app` **右键** → **打开（Open）** → 在弹窗中再次确认打开
+- 或到 **系统设置 → 隐私与安全性（Privacy & Security）**，在底部找到被拦截提示后选择“仍要打开”
+
+完成一次人工放行后，后续通常可以正常启动。
+
+### 未来升级路径：签名（codesign）与公证（notarization）
+
+当你愿意加入 Apple Developer Program（约 $99/年）后，可以将发布流程升级为：
+
+- **codesign（Developer ID Application）**：启用 hardened runtime，对 `.app` 签名
+- **notarytool 公证**：`xcrun notarytool submit --wait` 提交并等待通过
+- **stapler**：`xcrun stapler staple` 将公证票据 stapling 到 `.app`（或 DMG）
+
+升级后可以显著减少用户首次安装/启动的阻碍（Gatekeeper 提示会更少/更顺畅）。
 
 ### 环境要求（打包机）
 
