@@ -119,9 +119,19 @@ jobs:
           Write-Host "Uploading asset: $assetName"
 
           gh --version
+          # Repo enables "Immutable releases": assets cannot be uploaded/overwritten
+          # after the release is published. Use the draft->upload->publish flow.
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --title $tag --notes ""
+            gh release create $tag --draft --title $tag --notes "" "$installerPath#$assetName"
+            gh release edit $tag --draft=false
+            exit 0
+          }
+
+          $isDraft = (gh release view $tag --json isDraft -q .isDraft)
+          if ($isDraft -ne "true") {
+            throw "Release '$tag' is already published and immutable; cannot upload/replace assets. Please create a new tag to publish new assets."
           }
 
           gh release upload $tag "$installerPath#$assetName" --clobber
+          gh release edit $tag --draft=false

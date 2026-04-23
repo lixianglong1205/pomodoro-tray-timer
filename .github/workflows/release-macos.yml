@@ -106,9 +106,21 @@ jobs:
           asset_name="pomodoro-tray-timer-$tag.dmg"
 
           gh --version
+          # Repo enables "Immutable releases": assets cannot be uploaded/overwritten
+          # after the release is published. Use the draft->upload->publish flow.
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --title "$tag" --notes ""
+            gh release create "$tag" --draft --title "$tag" --notes "" "$dmg_path#$asset_name"
+            gh release edit "$tag" --draft=false
+            exit 0
+          fi
+
+          is_draft="$(gh release view "$tag" --json isDraft -q .isDraft)"
+          if [[ "$is_draft" != "true" ]]; then
+            echo "Release '$tag' is already published and immutable; cannot upload/replace assets."
+            echo "Please create a new tag (e.g. ${tag}-r1 or bump version) to publish new assets."
+            exit 1
           fi
 
           gh release upload "$tag" "$dmg_path#$asset_name" --clobber
+          gh release edit "$tag" --draft=false
 
