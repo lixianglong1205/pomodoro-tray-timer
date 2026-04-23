@@ -25,7 +25,11 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
         with:
+          version: "0.11.6"
           enable-cache: true
+
+      - name: Print uv version
+        run: uv --version
 
       - name: Select lockfile (macOS)
         run: |
