@@ -126,13 +126,14 @@ jobs:
           Write-Host "Uploading asset: $assetName"
 
           gh --version
-          # Repo enables "Immutable releases": assets cannot be uploaded/overwritten
-          # after the release is published. Use the draft->upload->publish flow.
+          # Repo enables "Immutable releases": once a release is published,
+          # assets cannot be added/replaced. macOS and Windows workflows run
+          # in parallel, so each job ensures the release exists as a DRAFT,
+          # uploads its own asset, and only flips draft=false when BOTH the
+          # Windows (.exe) and macOS (.dmg) expected assets are present.
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --draft --title $tag --notes "" "$installerPath#$assetName"
-            gh release edit $tag --draft=false
-            exit 0
+            gh release create $tag --draft --title $tag --notes ""
           }
 
           $isDraft = (gh release view $tag --json isDraft -q .isDraft)
@@ -141,4 +142,19 @@ jobs:
           }
 
           gh release upload $tag "$installerPath#$assetName" --clobber
-          gh release edit $tag --draft=false
+
+          $expectedExe = "pomodoro-tray-timer-setup-$tag.exe"
+          $expectedDmg = "pomodoro-tray-timer-$tag.dmg"
+          $assetsJson = gh release view $tag --json assets -q '.assets[].name'
+          $hasExe = $false; $hasDmg = $false
+          foreach ($name in $assetsJson) {
+            if ($name -eq $expectedExe) { $hasExe = $true }
+            if ($name -eq $expectedDmg) { $hasDmg = $true }
+          }
+          Write-Host ("Release assets: hasExe={0}, hasDmg={1}" -f $hasExe, $hasDmg)
+          if ($hasExe -and $hasDmg) {
+            Write-Host "Both platform assets present; publishing release."
+            gh release edit $tag --draft=false
+          } else {
+            Write-Host "Peer asset not yet present; leaving release as draft."
+          }
