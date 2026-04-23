@@ -27,8 +27,13 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Select lockfile (Windows)
+        shell: pwsh
+        run: |
+          Copy-Item -Force uv.lock.windows uv.lock
+
       - name: Sync dependencies
-        run: uv sync --all-groups
+        run: uv sync --all-groups --locked
 
       - name: Build app (Nuitka)
         shell: pwsh

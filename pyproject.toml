@@ -5,11 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pyobjc-core>=12.1",
-    "pyobjc-framework-cocoa>=12.1",
-    "pyobjc-framework-usernotifications>=12.1",
+    "pyobjc-core>=12.1; sys_platform == 'darwin'",
+    "pyobjc-framework-cocoa>=12.1; sys_platform == 'darwin'",
+    "pyobjc-framework-usernotifications>=12.1; sys_platform == 'darwin'",
     "pyside6>=6.10.2",
-    "winotify>=1.1.0",
+    "winotify>=1.1.0; sys_platform == 'win32'",
 ]
 
 [dependency-groups]
@@ -17,3 +17,4 @@ dev = [
     "nuitka>=4.0.5",
     "pillow>=11.0.0",
 ]
+

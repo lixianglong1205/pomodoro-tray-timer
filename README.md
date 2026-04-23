@@ -68,6 +68,49 @@
 - Python **3.12+**（见 `pyproject.toml` 的 `requires-python`）
 - 依赖由 `uv` 管理（项目已包含 `uv.lock`）
 
+### 跨平台依赖（platform marker）与锁文件策略（重要）
+
+本项目同时支持 Windows 与 macOS，但**部分依赖是平台专属**。为避免在错误的平台上解析/构建失败，`pyproject.toml` 使用了 PEP 508 平台 marker：
+
+- **macOS only**：`pyobjc-*; sys_platform == "darwin"`
+- **Windows only**：`winotify; sys_platform == "win32"`
+
+同时，为了让 CI 与本地安装在各平台都稳定可复现，仓库维护**分平台 lock**（你会看到类似这些文件）：
+
+- `uv.lock.macos`
+- `uv.lock.windows`
+- `uv.lock.universal`（可选：仅用于对比/参考；实际以各平台 lock 为准）
+
+#### CI 如何选择 lock
+
+- **Windows release workflow** 会在 `uv sync --all-groups` 前选用 Windows 对应 lock（例如将 `uv.lock.windows.toml` 复制/替换为 `uv.lock`）
+- **macOS release workflow** 同理选用 macOS 对应 lock（例如将 `uv.lock.macos.toml` 复制/替换为 `uv.lock`）
+
+这样可以保证：
+
+- Windows runner 不会尝试构建 `pyobjc-*`
+- macOS runner 仍能正常安装 `pyobjc-*`
+
+#### 分平台 lock 如何生成/更新
+
+当你新增/升级依赖后，建议在**对应平台**各自更新一次 lock：
+
+- **在 macOS 上**：
+
+```bash
+uv lock
+cp uv.lock uv.lock.macos
+```
+
+- **在 Windows 上（PowerShell）**：
+
+```powershell
+uv lock
+Copy-Item uv.lock uv.lock.windows
+```
+
+提交 PR/发布前，确保两个分平台 lock 都已更新并进入版本控制；CI 会按平台自动选择正确的 lock 进行 `uv sync --all-groups`。
+
 ### 安装依赖
 
 在项目根目录执行：

@@ -82,11 +82,11 @@ name = "pomodoro-app"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-usernotifications" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-usernotifications", marker = "sys_platform == 'darwin'" },
     { name = "pyside6" },
-    { name = "winotify" },
+    { name = "winotify", marker = "sys_platform == 'win32'" },
 ]
 
 [package.dev-dependencies]
@@ -97,11 +97,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "pyobjc-core", specifier = ">=12.1" },
-    { name = "pyobjc-framework-cocoa", specifier = ">=12.1" },
-    { name = "pyobjc-framework-usernotifications", specifier = ">=12.1" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'", specifier = ">=12.1" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'", specifier = ">=12.1" },
+    { name = "pyobjc-framework-usernotifications", marker = "sys_platform == 'darwin'", specifier = ">=12.1" },
     { name = "pyside6", specifier = ">=6.10.2" },
-    { name = "winotify", specifier = ">=1.1.0" },
+    { name = "winotify", marker = "sys_platform == 'win32'", specifier = ">=1.1.0" },
 ]
 
 [package.metadata.requires-dev]
