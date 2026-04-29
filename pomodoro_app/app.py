@@ -98,7 +98,6 @@ def run() -> int:
     tray: TrayController | None = None
     notifier: Notifier | None = None
     history: HistoryWindow | None = None
-    settings: SettingsWindow | None = None
 
     def on_open_history() -> None:
         nonlocal history
@@ -109,12 +108,10 @@ def run() -> int:
         history.activateWindow()
 
     def on_open_settings() -> None:
-        nonlocal settings
-        if settings is None:
-            settings = SettingsWindow(engine)
-        settings.show()
-        settings.raise_()
-        settings.activateWindow()
+        w = SettingsWindow(engine)
+        w.show()
+        w.raise_()
+        w.activateWindow()
 
     def on_quit() -> None:
         if tray is not None:
@@ -161,6 +158,13 @@ def run() -> int:
         storage.append(record)
 
     engine.phase_finished.connect(persist_phase_finished)
+
+    def on_language_changed(_lang: str) -> None:
+        if history is not None:
+            history.retranslate_ui()
+
+    engine.language_changed.connect(on_language_changed)
+
     tray.show()
 
     exit_code = app.exec()

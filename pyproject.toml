@@ -18,6 +18,8 @@ dev = [
     "pillow>=11.0.0",
     "ruff>=0.11.0",
     "mypy>=1.15.0",
+    "pytest>=9.0.3",
+    "pytest-qt>=4.5.0",
 ]
 
 [tool.ruff]

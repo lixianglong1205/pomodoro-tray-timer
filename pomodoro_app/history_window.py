@@ -75,10 +75,13 @@ class HistoryWindow(QDialog):
         self._btn_apply = QPushButton(_("筛选/刷新"))
         self._btn_clear = QPushButton(_("清除筛选"))
 
+        self._label_from = QLabel(_("从"))
+        self._label_to = QLabel(_("到"))
+
         top = QHBoxLayout()
-        top.addWidget(QLabel(_("从")))
+        top.addWidget(self._label_from)
         top.addWidget(self._from_date)
-        top.addWidget(QLabel(_("到")))
+        top.addWidget(self._label_to)
         top.addWidget(self._to_date)
         top.addSpacing(12)
         top.addWidget(self._btn_apply)
@@ -155,6 +158,23 @@ class HistoryWindow(QDialog):
 
         self._render_records(filtered_records)
         self._render_stats(self._storage.aggregate_daily(filtered_records))
+
+    def retranslate_ui(self) -> None:
+        self.setWindowTitle(_("历史记录"))
+        self._from_date.setSpecialValueText(_("开始日期"))
+        self._to_date.setSpecialValueText(_("结束日期"))
+        self._label_from.setText(_("从"))
+        self._label_to.setText(_("到"))
+        self._btn_apply.setText(_("筛选/刷新"))
+        self._btn_clear.setText(_("清除筛选"))
+        self._records_table.setHorizontalHeaderLabels(
+            [_("日期"), _("集中精力"), _("短暂休息"), _("长休息"), _("开始时间"), _("结束时间")]
+        )
+        self._stats_table.setHorizontalHeaderLabels(
+            [_("日期"), _("专注时钟数"), _("专注总分钟")]
+        )
+        self._tabs.setTabText(0, _("记录明细"))
+        self._tabs.setTabText(1, _("每日统计"))
 
     def _render_records(self, records: list[SessionRecord]) -> None:
         self._records_table.setRowCount(len(records))

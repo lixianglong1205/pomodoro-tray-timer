@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -120,12 +119,8 @@ class SettingsWindow(QDialog):
         super().showEvent(event)
 
     def _update_lang_hint(self) -> None:
-        chosen = self._combo_lang.currentData()
-        if chosen != I18n.instance().language:
-            self._lang_hint.setText(_("重新启动后生效"))
-            self._lang_hint.show()
-        else:
-            self._lang_hint.hide()
+        # 语言切换现在即时生效，无需重启提示
+        self._lang_hint.hide()
 
     def _current_language(self) -> str:
         return str(self._combo_lang.currentData())
@@ -159,5 +154,6 @@ class SettingsWindow(QDialog):
             long_break_every_focus=cfg.long_break_every_focus,
         )
         if new_lang != I18n.instance().language:
-            QMessageBox.information(self, _("设置"), _("重新启动后生效"))
+            I18n.switch_language(new_lang)
+            self._engine.language_changed.emit(new_lang)
         self.accept()

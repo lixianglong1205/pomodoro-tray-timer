@@ -5,8 +5,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Slot
-from PySide6.QtGui import QAction, QColor, QCursor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from .i18n import _
 from .timer_engine import Phase, PhaseFinished, PhaseRun, TimerEngine
@@ -88,12 +88,9 @@ class TrayController(QObject):
         menu.addAction(self._act_settings)
         menu.addSeparator()
         menu.addAction(self._act_quit)
-        # 在 macOS 上不调用 setContextMenu：NSStatusItem 一旦绑定原生菜单，
-        # 任何点击（包括左键）都会自动弹菜单，无法区分左右键。
-        # 改为在 _on_tray_activated 里按 reason 手动弹菜单。
-        # Windows / Linux 仍然使用原生上下文菜单以获得最佳体验。
-        if not self._is_macos:
-            self._tray.setContextMenu(menu)
+        # macOS：使用原生 NSMenu 确保从任何应用前台都能点击弹出菜单。
+        # Windows / Linux 也使用同样的方式以获得最佳兼容性。
+        self._tray.setContextMenu(menu)
 
         self._act_stop.triggered.connect(self._engine.stop)
         self._act_pause.triggered.connect(self._engine.toggle_pause)
@@ -114,6 +111,7 @@ class TrayController(QObject):
         self._engine.phase_finished.connect(self._on_phase_finished)
         self._engine.paused_changed.connect(self._on_paused_changed)
         self._engine.stopped.connect(self._on_stopped)
+        self._engine.language_changed.connect(self._on_language_changed)
 
     def show(self) -> None:
         if self._is_macos:
@@ -306,32 +304,15 @@ class TrayController(QObject):
 
     @Slot(QSystemTrayIcon.ActivationReason)
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        if self._is_macos and reason == QSystemTrayIcon.ActivationReason.Context:
-            self._show_context_menu_macos()
+        if self._is_macos:
+            # macOS 上用 setContextMenu 绑定了原生 NSMenu，任何点击都由系统原生弹出，
+            # 无需也不应该在 Qt 层再手动弹菜单或处理左键逻辑，否则会与原生菜单冲突。
             return
         if reason in (
             QSystemTrayIcon.ActivationReason.Trigger,
             QSystemTrayIcon.ActivationReason.DoubleClick,
         ):
             self._on_left_click()
-
-    def _show_context_menu_macos(self) -> None:
-        if self._menu is None:
-            return
-
-        try:
-            from AppKit import NSApplication
-
-            NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
-        except Exception:
-            pass
-
-        try:
-            QApplication.processEvents()
-        except Exception:
-            pass
-
-        self._menu.exec(QCursor.pos())
 
     def _on_left_click(self) -> None:
         if self._engine.phase != Phase.idle:
@@ -341,6 +322,24 @@ class TrayController(QObject):
             self._engine.start_pending()
             return
         self._engine.start_focus()
+
+    def retranslate_ui(self) -> None:
+        self._tray.setToolTip(_("番茄钟"))
+        self._act_stop.setText(_("终止时钟"))
+        self._act_pause.setText(_("暂停"))
+        self._act_focus.setText(_("开始集中精力"))
+        self._act_short.setText(_("开始短暂休息"))
+        self._act_long.setText(_("开始长时间休息"))
+        self._act_restart.setText(_("重新开始番茄钟循环"))
+        self._act_history.setText(_("打开历史记录"))
+        self._act_settings.setText(_("设置..."))
+        self._act_quit.setText(_("退出"))
+        self._sync_pause_action()
+        self._refresh(force=True)
+
+    @Slot(str)
+    def _on_language_changed(self, _lang: str) -> None:
+        self.retranslate_ui()
 
     @Slot(object)
     def _on_tick(self, _run: PhaseRun) -> None:

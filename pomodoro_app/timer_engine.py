@@ -61,6 +61,7 @@ class TimerEngine(QObject):
     phase_finished = Signal(object)  # PhaseFinished
     paused_changed = Signal(bool)
     stopped = Signal()
+    language_changed = Signal(str)  # new language code
 
     def __init__(self, config: TimerConfig | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
