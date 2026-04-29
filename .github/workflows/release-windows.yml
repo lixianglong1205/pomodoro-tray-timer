@@ -145,14 +145,26 @@ jobs:
 
           $expectedExe = "pomodoro-tray-timer-setup-$tag.exe"
           $expectedDmg = "pomodoro-tray-timer-$tag.dmg"
-          $assetsJson = gh release view $tag --json assets -q '.assets[].name'
-          $hasExe = $false; $hasDmg = $false
-          foreach ($name in $assetsJson) {
-            if ($name -eq $expectedExe) { $hasExe = $true }
-            if ($name -eq $expectedDmg) { $hasDmg = $true }
+
+          # Retry to handle GitHub API eventual consistency
+          $hasBoth = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            $assetsJson = gh release view $tag --json assets -q '.assets[].name'
+            $hasExe = $false; $hasDmg = $false
+            foreach ($name in $assetsJson) {
+              $trimmed = $name.Trim()
+              if ($trimmed -eq $expectedExe) { $hasExe = $true }
+              if ($trimmed -eq $expectedDmg) { $hasDmg = $true }
+            }
+            Write-Host ("Release assets (attempt {0}): hasExe={1}, hasDmg={2}" -f $attempt, $hasExe, $hasDmg)
+            if ($hasExe -and $hasDmg) {
+              $hasBoth = $true
+              break
+            }
+            Start-Sleep -Seconds 3
           }
-          Write-Host ("Release assets: hasExe={0}, hasDmg={1}" -f $hasExe, $hasDmg)
-          if ($hasExe -and $hasDmg) {
+
+          if ($hasBoth) {
             Write-Host "Both platform assets present; publishing release."
             gh release edit $tag --draft=false
           } else {

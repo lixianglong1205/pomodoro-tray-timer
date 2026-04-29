@@ -37,6 +37,9 @@ jobs:
       - name: Sync dependencies
         run: uv sync --all-groups --locked
 
+      - name: Build app icon (.icns)
+        run: uv run python scripts/ico_to_icns.py assets/icon-red-tomato.ico assets/icon-red-tomato.icns
+
       - name: Build app (.app, Nuitka)
         run: |
           chmod +x ./scripts/build-macos.sh
@@ -133,14 +136,26 @@ jobs:
 
           expected_exe="pomodoro-tray-timer-setup-${tag}.exe"
           expected_dmg="pomodoro-tray-timer-${tag}.dmg"
-          assets="$(gh release view "$tag" --json assets -q '.assets[].name')"
-          has_exe=0; has_dmg=0
-          while IFS= read -r name; do
-            [[ "$name" == "$expected_exe" ]] && has_exe=1
-            [[ "$name" == "$expected_dmg" ]] && has_dmg=1
-          done <<< "$assets"
-          echo "Release assets: has_exe=$has_exe, has_dmg=$has_dmg"
-          if [[ "$has_exe" == "1" && "$has_dmg" == "1" ]]; then
+
+          # Retry to handle GitHub API eventual consistency
+          has_both=0
+          for attempt in 1 2 3; do
+            assets="$(gh release view "$tag" --json assets -q '.assets[].name')"
+            has_exe=0; has_dmg=0
+            while IFS= read -r name; do
+              stripped="${name%%$'\r'}"
+              [[ "$stripped" == "$expected_exe" ]] && has_exe=1
+              [[ "$stripped" == "$expected_dmg" ]] && has_dmg=1
+            done <<< "$assets"
+            echo "Release assets (attempt $attempt): has_exe=$has_exe, has_dmg=$has_dmg"
+            if [[ "$has_exe" == "1" && "$has_dmg" == "1" ]]; then
+              has_both=1
+              break
+            fi
+            sleep 3
+          done
+
+          if [[ "$has_both" == "1" ]]; then
             echo "Both platform assets present; publishing release."
             gh release edit "$tag" --draft=false
           else
