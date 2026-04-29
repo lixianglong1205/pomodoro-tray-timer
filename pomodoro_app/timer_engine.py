@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 
-class Phase(str, Enum):
+class Phase(str, Enum):  # noqa: UP042 — need Python 3.10 compat
     idle = "idle"
     focus = "focus"
     short_break = "short_break"
@@ -193,6 +193,13 @@ class TimerEngine(QObject):
     def restart_cycle(self) -> None:
         self._focus_completed_in_cycle = 0
         self.start_focus()
+
+    def force_finish_phase(self) -> None:
+        """Force the current phase to finish immediately. Intended for testing only."""
+        if self._phase == Phase.idle:
+            return
+        self._remaining_seconds = 1
+        self._on_timeout()
 
     def next_suggested_phase(self) -> Phase:
         return self._suggest_next(self._phase, self._focus_completed_in_cycle)

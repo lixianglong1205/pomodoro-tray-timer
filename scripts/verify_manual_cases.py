@@ -29,9 +29,7 @@ def _simulate_tray_left_click(engine: TimerEngine) -> None:
 
 
 def _force_natural_finish(engine: TimerEngine) -> None:
-    # Make the next timeout finish immediately.
-    engine._remaining_seconds = 1  # noqa: SLF001 - test-only access
-    engine._on_timeout()  # noqa: SLF001 - test-only access
+    engine.force_finish_phase()
 
 
 def _new_engine() -> TimerEngine:

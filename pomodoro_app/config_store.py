@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .timer_engine import TimerConfig
 from .paths import default_config_path, legacy_config_path
+from .timer_engine import TimerConfig
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,14 +18,16 @@ class AppConfig:
     short_break_minutes: int
     long_break_minutes: int
     long_break_every_focus: int
+    language: str = "zh"
 
     @classmethod
-    def from_timer_config(cls, config: TimerConfig) -> "AppConfig":
+    def from_timer_config(cls, config: TimerConfig, language: str = "zh") -> AppConfig:
         return cls(
             focus_minutes=config.focus_minutes,
             short_break_minutes=config.short_break_minutes,
             long_break_minutes=config.long_break_minutes,
             long_break_every_focus=config.long_break_every_focus,
+            language=language,
         )
 
     def to_timer_config(self) -> TimerConfig:
@@ -52,7 +57,7 @@ def _migrate_legacy_config_if_needed(target: Path) -> None:
     try:
         target.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
     except Exception:
-        return
+        logger.warning("failed to migrate legacy config from %s to %s", legacy, target)
 
 
 def load_config(path: Path | None = None) -> AppConfig:
@@ -64,20 +69,26 @@ def load_config(path: Path | None = None) -> AppConfig:
     try:
         raw = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
+        logger.warning("failed to parse config JSON from %s, using defaults", p)
         return default_config()
 
     try:
         data = _coerce_dict(raw)
         defaults = default_config()
+        language = data.get("language", "zh")
+        if not isinstance(language, str) or len(language) != 2:
+            language = "zh"
         cfg = AppConfig(
             focus_minutes=_as_pos_int(data.get("focus_minutes")),
             short_break_minutes=_as_pos_int(data.get("short_break_minutes")),
             long_break_minutes=_as_pos_int(data.get("long_break_minutes")),
             long_break_every_focus=_as_pos_int(data.get("long_break_every_focus", defaults.long_break_every_focus)),
+            language=language,
         )
         cfg.to_timer_config()
         return cfg
     except Exception:
+        logger.warning("invalid config data, using defaults")
         return default_config()
 
 
@@ -93,6 +104,7 @@ def save_config(config: AppConfig, path: Path | None = None) -> None:
         "short_break_minutes": config.short_break_minutes,
         "long_break_minutes": config.long_break_minutes,
         "long_break_every_focus": config.long_break_every_focus,
+        "language": config.language,
     }
     p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 

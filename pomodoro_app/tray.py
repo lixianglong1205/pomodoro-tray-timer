@@ -1,56 +1,15 @@
 from __future__ import annotations
 
+import platform
+from collections.abc import Callable
 from dataclasses import dataclass, field
-import json
-import os
-import time
-import uuid
 
-from PySide6.QtCore import QObject, Qt, Slot
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtCore import QRectF
-from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+from PySide6.QtCore import QObject, QRectF, Qt, QTimer, Slot
+from PySide6.QtGui import QAction, QColor, QCursor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from .paths import app_root_dir
+from .i18n import _
 from .timer_engine import Phase, PhaseFinished, PhaseRun, TimerEngine
-
-
-# region agent log
-def _agent_log_enabled() -> bool:
-    return os.environ.get("POMODORO_AGENT_LOG", "").strip() in {"1", "true", "True", "yes", "YES"}
-
-
-def _agent_log_path() -> str:
-    override = os.environ.get("POMODORO_AGENT_LOG_PATH", "").strip()
-    if override:
-        return os.path.expandvars(override)
-    return str(app_root_dir() / "logs" / "agent-debug.log")
-
-
-def _agent_log(*, run_id: str, hypothesis_id: str, location: str, message: str, data: dict) -> None:
-    if not _agent_log_enabled():
-        return
-
-    payload = {
-        "sessionId": "b1818b",
-        "id": f"log_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}",
-        "timestamp": int(time.time() * 1000),
-        "runId": run_id,
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-    }
-    try:
-        path = _agent_log_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        return
-
-
-# endregion
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,29 +23,29 @@ class TrayTheme:
 
 def _phase_label(phase: Phase) -> str:
     if phase == Phase.focus:
-        return "集中精力"
+        return _("集中精力")
     if phase == Phase.short_break:
-        return "短暂休息"
+        return _("短暂休息")
     if phase == Phase.long_break:
-        return "长时间休息"
-    return "空闲"
+        return _("长时间休息")
+    return _("空闲")
 
 
 def _suggest_label(phase: Phase) -> str:
     if phase == Phase.focus:
-        return "下一步：休息"
+        return _("下一步：休息")
     if phase in (Phase.short_break, Phase.long_break):
-        return "下一步：开始专注"
-    return "下一步：开始专注"
+        return _("下一步：开始专注")
+    return _("下一步：开始专注")
 
 
 class TrayController(QObject):
     def __init__(
         self,
         engine: TimerEngine,
-        on_open_history,
-        on_open_settings,
-        on_quit,
+        on_open_history: Callable[[], None],
+        on_open_settings: Callable[[], None],
+        on_quit: Callable[[], None],
         *,
         parent: QObject | None = None,
         theme: TrayTheme | None = None,
@@ -96,34 +55,25 @@ class TrayController(QObject):
         self._engine = engine
         self._theme = theme or TrayTheme()
         self._icon_size = icon_size
-        self._agent_run_id = f"pre-fix_{int(time.time())}"
+        self._is_macos = platform.system().lower() == "darwin"
 
         self._tray = QSystemTrayIcon(self)
-        _agent_log(
-            run_id=self._agent_run_id,
-            hypothesis_id="H1",
-            location="pomodoro_app/tray.py:TrayController.__init__",
-            message="QSystemTrayIcon created",
-            data={
-                "isSystemTrayAvailable": bool(QSystemTrayIcon.isSystemTrayAvailable()),
-                "supportsMessages": bool(QSystemTrayIcon.supportsMessages()),
-            },
-        )
-        self._tray.setToolTip("番茄钟")
+        self._tray.setToolTip(_("番茄钟"))
         self._tray.setIcon(self._render_icon(minutes=None, phase=Phase.idle, paused=False))
 
         self._tray.activated.connect(self._on_tray_activated)
 
         menu = QMenu()
-        self._act_stop = QAction("终止时钟", menu)
-        self._act_pause = QAction("暂停", menu)
-        self._act_focus = QAction("开始集中精力", menu)
-        self._act_short = QAction("开始短暂休息", menu)
-        self._act_long = QAction("开始长时间休息", menu)
-        self._act_restart = QAction("重新开始番茄钟循环", menu)
-        self._act_history = QAction("打开历史记录", menu)
-        self._act_settings = QAction("设置...", menu)
-        self._act_quit = QAction("退出", menu)
+        self._menu = menu
+        self._act_stop = QAction(_("终止时钟"), menu)
+        self._act_pause = QAction(_("暂停"), menu)
+        self._act_focus = QAction(_("开始集中精力"), menu)
+        self._act_short = QAction(_("开始短暂休息"), menu)
+        self._act_long = QAction(_("开始长时间休息"), menu)
+        self._act_restart = QAction(_("重新开始番茄钟循环"), menu)
+        self._act_history = QAction(_("打开历史记录"), menu)
+        self._act_settings = QAction(_("设置..."), menu)
+        self._act_quit = QAction(_("退出"), menu)
 
         menu.addAction(self._act_stop)
         menu.addAction(self._act_pause)
@@ -138,7 +88,12 @@ class TrayController(QObject):
         menu.addAction(self._act_settings)
         menu.addSeparator()
         menu.addAction(self._act_quit)
-        self._tray.setContextMenu(menu)
+        # 在 macOS 上不调用 setContextMenu：NSStatusItem 一旦绑定原生菜单，
+        # 任何点击（包括左键）都会自动弹菜单，无法区分左右键。
+        # 改为在 _on_tray_activated 里按 reason 手动弹菜单。
+        # Windows / Linux 仍然使用原生上下文菜单以获得最佳体验。
+        if not self._is_macos:
+            self._tray.setContextMenu(menu)
 
         self._act_stop.triggered.connect(self._engine.stop)
         self._act_pause.triggered.connect(self._engine.toggle_pause)
@@ -161,32 +116,14 @@ class TrayController(QObject):
         self._engine.stopped.connect(self._on_stopped)
 
     def show(self) -> None:
-        _agent_log(
-            run_id=self._agent_run_id,
-            hypothesis_id="H2",
-            location="pomodoro_app/tray.py:TrayController.show",
-            message="Tray show() called",
-            data={},
-        )
-        try:
+        if self._is_macos:
+            # macOS Nuitka 打包后，事件循环尚未启动时调用 setIcon 可能不生效。
+            # 先 show 托盘，再用 QTimer 推迟图标渲染到事件循环运行后。
             self._tray.show()
-            _agent_log(
-                run_id=self._agent_run_id,
-                hypothesis_id="H2",
-                location="pomodoro_app/tray.py:TrayController.show",
-                message="Tray show() returned",
-                data={"visible": bool(self._tray.isVisible())},
-            )
-        except Exception as e:
-            _agent_log(
-                run_id=self._agent_run_id,
-                hypothesis_id="H2",
-                location="pomodoro_app/tray.py:TrayController.show",
-                message="Tray show() raised",
-                data={"exc_type": type(e).__name__, "exc": str(e)},
-            )
-            raise
-        self._refresh(force=True)
+            QTimer.singleShot(0, lambda: self._refresh(force=True))
+        else:
+            self._tray.show()
+            self._refresh(force=True)
 
     def hide(self) -> None:
         self._tray.hide()
@@ -222,16 +159,16 @@ class TrayController(QObject):
     def _build_tooltip(self, run: PhaseRun) -> str:
         phase_name = _phase_label(run.phase)
         if run.phase == Phase.idle:
-            return "番茄钟（空闲）\n下一步：开始专注"
+            return f"{_('番茄钟')}（{_('空闲')}）\n{_('下一步：开始专注')}"
 
         minutes = self._minutes_remaining(run)
         next_phase = self._engine.next_suggested_phase()
         next_name = _phase_label(next_phase)
-        paused_suffix = "，已暂停" if self._engine.is_paused else ""
+        paused_suffix = _("，已暂停") if self._engine.is_paused else ""
         return (
-            f"番茄钟（{phase_name}{paused_suffix}）\n"
-            f"剩余：{minutes} 分钟\n"
-            f"下一阶段：{next_name}"
+            f"{_('番茄钟')}（{phase_name}{paused_suffix}）\n"
+            f"{_('剩余')}：{minutes} {_('分钟')}\n"
+            f"{_('下一阶段')}：{next_name}"
         )
 
     def _render_icon(self, *, minutes: int | None, phase: Phase, paused: bool) -> QIcon:
@@ -262,10 +199,15 @@ class TrayController(QObject):
             self._draw_pause_badge(painter)
 
         painter.end()
-        return QIcon(pixmap)
+        icon = QIcon(pixmap)
+        if self._is_macos:
+            try:
+                icon.setIsTemplate(False)  # type: ignore[attr-defined]  # macOS only
+            except AttributeError:
+                pass
+        return icon
 
     def _suggest_minutes_font_px(self, minutes: int) -> int:
-        # Keep digits readable at 16/24/32px tray sizes.
         size = self._icon_size
         if minutes >= 100:
             scale = 0.40
@@ -273,20 +215,13 @@ class TrayController(QObject):
             scale = 0.50
         else:
             scale = 0.56
-        # Slightly larger floor so "1" doesn't look too tiny at 16px.
         return max(9 if size <= 16 else 8, int(size * scale))
 
     def _draw_tomato(self, painter: QPainter, *, fill: QColor) -> QRectF:
-        """
-        Draw a stylized tomato (fruit + leaves).
-        Returns the fruit rect for centering the minute digits.
-        """
         size = float(self._icon_size)
-        # Calibrated for common tray sizes (16/24/32) while still looking decent at 128.
         stroke = float(max(1, int(round(size / 32))))
         pad = float(max(1, int(round(size / 14))))
 
-        # Allocate some vertical space for leaves so the fruit stays centered-ish.
         leaf_h = max(4.0, size * 0.20)
         leaf_w = max(7.0, size * 0.42)
         leaf_top = pad + stroke / 2
@@ -306,14 +241,12 @@ class TrayController(QObject):
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        # Fruit body
         painter.setBrush(fill)
         painter.setPen(outline_pen)
         body_path = QPainterPath()
         body_path.addEllipse(fruit_rect)
         painter.drawPath(body_path)
 
-        # Leaves (simple 3-lobe crown)
         leaf_fill = QColor("#00BC12")
         leaf_pen = QPen(self._theme.outline, max(1.0, stroke * 0.85))
         leaf_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
@@ -324,14 +257,10 @@ class TrayController(QObject):
         cx = size / 2
         crown_y = leaf_top + leaf_h * 0.85
         lobe_r = max(1.8, leaf_h * 0.26)
-        # Left lobe
         painter.drawEllipse(QRectF(cx - leaf_w * 0.22 - lobe_r, crown_y - lobe_r, lobe_r * 2, lobe_r * 2))
-        # Center lobe
         painter.drawEllipse(QRectF(cx - lobe_r, crown_y - lobe_r * 1.05, lobe_r * 2, lobe_r * 2))
-        # Right lobe
         painter.drawEllipse(QRectF(cx + leaf_w * 0.22 - lobe_r, crown_y - lobe_r, lobe_r * 2, lobe_r * 2))
 
-        # Small stem
         stem_w = max(2.0, leaf_w * 0.12)
         stem_h = max(3.0, leaf_h * 0.40)
         stem_rect = QRectF(cx - stem_w / 2, leaf_top + leaf_h * 0.15, stem_w, stem_h)
@@ -341,7 +270,6 @@ class TrayController(QObject):
         return fruit_rect
 
     def _draw_pause_badge(self, painter: QPainter) -> None:
-        # top-right badge with "||"
         size = self._icon_size
         pad = max(6, size // 18)
         badge = max(26, size // 4)
@@ -366,21 +294,44 @@ class TrayController(QObject):
 
     def _sync_pause_action(self) -> None:
         if self._engine.phase == Phase.idle:
-            self._act_pause.setText("暂停")
+            self._act_pause.setText(_("暂停"))
             self._act_pause.setEnabled(False)
             return
         if self._engine.is_paused:
-            self._act_pause.setText("继续")
+            self._act_pause.setText(_("继续"))
             self._act_pause.setEnabled(True)
             return
-        self._act_pause.setText("暂停")
+        self._act_pause.setText(_("暂停"))
         self._act_pause.setEnabled(True)
 
     @Slot(QSystemTrayIcon.ActivationReason)
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        if reason != QSystemTrayIcon.ActivationReason.Trigger:
+        if self._is_macos and reason == QSystemTrayIcon.ActivationReason.Context:
+            self._show_context_menu_macos()
             return
-        self._on_left_click()
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
+            self._on_left_click()
+
+    def _show_context_menu_macos(self) -> None:
+        if self._menu is None:
+            return
+
+        try:
+            from AppKit import NSApplication
+
+            NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+        except Exception:
+            pass
+
+        try:
+            QApplication.processEvents()
+        except Exception:
+            pass
+
+        self._menu.exec(QCursor.pos())
 
     def _on_left_click(self) -> None:
         if self._engine.phase != Phase.idle:
@@ -410,4 +361,3 @@ class TrayController(QObject):
     @Slot()
     def _on_stopped(self) -> None:
         self._refresh(force=True)
-

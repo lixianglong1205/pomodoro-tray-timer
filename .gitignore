@@ -12,3 +12,12 @@ logs/
 
 # Virtual environments
 .venv
+
+# macOS
+.DS_Store
+
+# cursor
+.cursor/
+
+# VSCode (local editor settings)
+.vscode/

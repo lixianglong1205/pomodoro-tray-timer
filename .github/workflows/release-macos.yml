@@ -1,0 +1,149 @@
+name: Release macOS DMG
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    env:
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.7"
+          enable-cache: true
+
+      - name: Print uv version
+        run: uv --version
+
+      - name: Verify lockfile up-to-date
+        run: uv lock --check
+
+      - name: Sync dependencies
+        run: uv sync --all-groups --locked
+
+      - name: Build app (.app, Nuitka)
+        run: |
+          chmod +x ./scripts/build-macos.sh
+          ./scripts/build-macos.sh
+
+      - name: Install create-dmg (Homebrew)
+        run: |
+          set -euo pipefail
+          if brew list create-dmg >/dev/null 2>&1; then
+            brew upgrade create-dmg || true
+          else
+            brew install create-dmg
+          fi
+
+      - name: Build DMG (create-dmg with retry)
+        run: |
+          set -euo pipefail
+          mkdir -p dist-installer
+          rm -rf dist-dmg
+          mkdir -p dist-dmg
+
+          app_path="dist/pomodoro-tray-timer.app"
+          test -d "$app_path"
+          cp -R "$app_path" dist-dmg/
+
+          dmg_path="dist-installer/pomodoro-tray-timer.dmg"
+          rm -f "$dmg_path"
+
+          retry() {
+            local max="$1"
+            shift
+            local i=1
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+
+              if [[ $i -ge $max ]]; then
+                return 1
+              fi
+
+              sleep $((i * 2))
+              i=$((i + 1))
+            done
+          }
+
+          # hdiutil on CI can occasionally fail with "resource busy"; retry helps.
+          retry 3 create-dmg \
+            --volname "Pomodoro Tray Timer" \
+            --app-drop-link 600 185 \
+            "$dmg_path" \
+            "dist-dmg"
+
+          test -f "$dmg_path"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg-${{ github.ref_name }}
+          path: |
+            dist/pomodoro-tray-timer.app/**
+            dist-installer/pomodoro-tray-timer.dmg
+
+      - name: Create/Update GitHub Release and upload DMG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          tag="${TAG_NAME:?TAG_NAME is empty}"
+          dmg_path="dist-installer/pomodoro-tray-timer.dmg"
+          test -f "$dmg_path"
+
+          asset_name="pomodoro-tray-timer-$tag.dmg"
+
+          gh --version
+          # Repo enables "Immutable releases": once a release is published,
+          # assets cannot be added/replaced. macOS and Windows workflows run
+          # in parallel, so each job ensures the release exists as a DRAFT,
+          # uploads its own asset, and only flips draft=false when BOTH the
+          # Windows (.exe) and macOS (.dmg) expected assets are present.
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --title "$tag" --notes ""
+          fi
+
+          is_draft="$(gh release view "$tag" --json isDraft -q .isDraft)"
+          if [[ "$is_draft" != "true" ]]; then
+            echo "Release '$tag' is already published and immutable; cannot upload/replace assets."
+            echo "Please create a new tag (e.g. ${tag}-r1 or bump version) to publish new assets."
+            exit 1
+          fi
+
+          gh release upload "$tag" "$dmg_path#$asset_name" --clobber
+
+          expected_exe="pomodoro-tray-timer-setup-${tag}.exe"
+          expected_dmg="pomodoro-tray-timer-${tag}.dmg"
+          assets="$(gh release view "$tag" --json assets -q '.assets[].name')"
+          has_exe=0; has_dmg=0
+          while IFS= read -r name; do
+            [[ "$name" == "$expected_exe" ]] && has_exe=1
+            [[ "$name" == "$expected_dmg" ]] && has_dmg=1
+          done <<< "$assets"
+          echo "Release assets: has_exe=$has_exe, has_dmg=$has_dmg"
+          if [[ "$has_exe" == "1" && "$has_dmg" == "1" ]]; then
+            echo "Both platform assets present; publishing release."
+            gh release edit "$tag" --draft=false
+          else
+            echo "Peer asset not yet present; leaving release as draft."
+          fi
+
