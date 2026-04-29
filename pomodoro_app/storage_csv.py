@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import csv
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from .models import CSV_HEADER, SessionRecord
 from .paths import default_history_path, legacy_history_path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +34,7 @@ class CsvStorage:
         try:
             self._path.write_bytes(legacy.read_bytes())
         except Exception:
-            return
+            logger.warning("failed to migrate legacy history from %s to %s", legacy, self._path)
 
     def ensure_ready(self) -> None:
         self._migrate_legacy_if_needed()
@@ -56,12 +59,12 @@ class CsvStorage:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
-                    record = SessionRecord.from_csv_row(row)  # type: ignore[arg-type]
+                    record = SessionRecord.from_csv_row(row)
                     if not record.date or not record.start_time or not record.end_time:
                         continue
                     records.append(record)
                 except Exception:
-                    continue
+                    logger.warning("skipping unparsable CSV row")
 
         def sort_key(r: SessionRecord) -> str:
             return r.start_time
@@ -92,4 +95,3 @@ class CsvStorage:
         stats = list(by_date.values())
         stats.sort(key=lambda s: s.date, reverse=True)
         return stats
-

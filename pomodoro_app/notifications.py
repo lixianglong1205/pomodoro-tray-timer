@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import platform
 import subprocess
-from shutil import which
+from collections.abc import Callable
 from dataclasses import dataclass
+from shutil import which
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,7 +19,7 @@ class NotificationMessage:
 
 
 class Notifier:
-    def __init__(self, *, app_id: str = "PomodoroApp", fallback=None) -> None:
+    def __init__(self, *, app_id: str = "PomodoroApp", fallback: Callable[[str, str], None] | None = None) -> None:
         self._app_id = app_id
         self._fallback = fallback
 
@@ -35,23 +39,20 @@ class Notifier:
             return
 
         try:
-            from winotify import Notification  # type: ignore
-            from winotify import audio  # type: ignore
+            from winotify import (
+                Notification,
+                audio,
+            )
 
             toast = Notification(app_id=self._app_id, title=title, msg=message)
             # 跟随 Windows Toast 系统提示音
             toast.set_audio(audio.Default, loop=False)
             toast.show()
         except Exception:
+            logger.warning("winotify notification failed, using fallback")
             self._notify_fallback(title, message)
 
     def _show_tray_popup_macos(self, title: str, message: str) -> None:
-        """
-        Ensure an immediate, visible popup on macOS.
-
-        macOS 26 may deliver notifications to Notification Center but not show a banner.
-        The Qt tray balloon is a reliable "always visible" fallback.
-        """
         if os.environ.get("POMODORO_TRAY_POPUP", "").strip().lower() in {"0", "false", "no"}:
             return
         if self._fallback is None:
@@ -59,21 +60,14 @@ class Notifier:
         try:
             self._fallback(title, message)
         except Exception:
-            return
+            logger.warning("macOS tray popup failed")
 
     def _show_qt_toast_macos(self, title: str, message: str) -> None:
-        """
-        Show an always-on-top in-app toast on macOS.
-
-        Rationale: macOS 26 may deliver notifications to Notification Center but not
-        show a heads-up banner. Qt tray balloons can also be routed through the same
-        system mechanism. A small transient QWidget guarantees immediate visibility.
-        """
         if os.environ.get("POMODORO_QT_TOAST", "").strip().lower() in {"0", "false", "no"}:
             return
 
         try:
-            from PySide6.QtCore import QTimer, Qt
+            from PySide6.QtCore import Qt, QTimer
             from PySide6.QtGui import QGuiApplication
             from PySide6.QtWidgets import QLabel, QWidget
 
@@ -110,7 +104,6 @@ class Notifier:
             label.setWordWrap(True)
             label.adjustSize()
 
-            # Size to content with a reasonable max width.
             max_w = 360
             w = min(max_w, max(260, label.sizeHint().width()))
             label.setFixedWidth(w)
@@ -133,53 +126,17 @@ class Notifier:
             duration_ms = max(1000, min(duration_ms, 15000))
             QTimer.singleShot(duration_ms, toast.close)
         except Exception:
-            return
-
-    def _play_sound_macos(self) -> None:
-        """
-        Play an audible cue on macOS.
-
-        We intentionally do NOT rely on Notification Center sounds because macOS
-        may show notifications but suppress their audio.
-        """
-        # Disabled by default. Enable explicitly when you want an in-app sound cue.
-        if os.environ.get("POMODORO_SOUND", "").strip().lower() not in {"1", "true", "yes"}:
-            return
-
-        sound_file = os.environ.get("POMODORO_SOUND_FILE", "").strip()
-        if not sound_file:
-            sound_file = "/System/Library/Sounds/Glass.aiff"
-
-        try:
-            # Fire-and-forget to avoid blocking the UI thread.
-            subprocess.Popen(  # noqa: S603
-                ["afplay", sound_file],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            return
+            logger.warning("macOS Qt toast failed")
 
     def _notify_macos(self, title: str, message: str) -> bool:
-        """
-        Best-effort macOS Notification Center message via AppleScript.
-
-        Notes:
-        - First use may trigger a system prompt for the *host process* (e.g. Terminal/Python)
-          to allow notifications.
-        - This method does not support click callbacks.
-        """
         try:
-            # If the user has terminal-notifier installed, prefer it.
-            # It's generally more visible/manageable in macOS Notification settings.
             tn = which("terminal-notifier")
             if not tn:
-                # `uv run` / GUI launches may not include ~/.local/bin in PATH.
                 candidate = os.path.expanduser("~/.local/bin/terminal-notifier")
                 if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
                     tn = candidate
             if tn:
-                subprocess.run(
+                subprocess.run(  # noqa: S603
                     [tn, "-title", title, "-message", message, "-sound", "default"],
                     check=True,
                     capture_output=True,
@@ -189,8 +146,8 @@ class Notifier:
                 return True
 
             script = f"display notification {json.dumps(message)} with title {json.dumps(title)}"
-            subprocess.run(
-                ["osascript", "-e", script],
+            subprocess.run(  # noqa: S603
+                ["osascript", "-e", script],  # noqa: S607
                 check=True,
                 capture_output=True,
                 text=True,
@@ -198,6 +155,7 @@ class Notifier:
             )
             return True
         except Exception:
+            logger.warning("macOS notification failed")
             return False
 
     def _notify_fallback(self, title: str, message: str) -> None:
@@ -214,7 +172,6 @@ class Notifier:
         try:
             import winsound
 
-            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+            winsound.MessageBeep(winsound.MB_ICONASTERISK)  # type: ignore[attr-defined]
         except Exception:
             return
-

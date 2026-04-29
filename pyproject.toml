@@ -1,7 +1,7 @@
 [project]
 name = "pomodoro-app"
 version = "0.1.0"
-description = "Add your description here"
+description = "A pomodoro timer that lives in your system tray — cross-platform (macOS / Windows) with native notifications"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -16,5 +16,28 @@ dependencies = [
 dev = [
     "nuitka>=4.0.5",
     "pillow>=11.0.0",
+    "ruff>=0.11.0",
+    "mypy>=1.15.0",
 ]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 140
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "S", "SLF", "BLE"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*.py" = ["S101", "SLF001", "E402"]
+"tests/*.py" = ["S101", "SLF001"]
+
+# 以下规则在应用非关键路径上是设计使然的"尽力而为"模式，
+# 详见 docs/static-code-review.md 的 S-01 章节。
+"pomodoro_app/*.py" = ["BLE001", "S110", "S112"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+warn_unused_ignores = true
 

@@ -8,4 +8,6 @@ install:
 
 lint:
 	uv run python -m compileall pomodoro_app main.py
+	uv run ruff check pomodoro_app main.py scripts/
+	uv run mypy pomodoro_app main.py
 

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import configparser
+import logging
 import os
 import shutil
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def app_name() -> str:
@@ -52,14 +55,12 @@ def _looks_like_pomodoro_data_dir(p: Path) -> bool:
     try:
         names = {c.name for c in p.iterdir() if c.is_file()}
     except Exception:
+        logger.warning("failed to list directory %s", p)
         return False
     return bool(names & expected)
 
 
 def _try_one_time_migrate_legacy_dirs(dst: Path) -> None:
-    """
-    macOS：从旧目录一次性迁移到新目录（幂等，且不删除源目录，避免数据丢失）。
-    """
     marker = dst / ".migrated_from_legacy"
     if marker.exists():
         return
@@ -85,6 +86,7 @@ def _try_one_time_migrate_legacy_dirs(dst: Path) -> None:
             migrated_from = src
             break
         except Exception:
+            logger.warning("failed to migrate data from %s to %s", src, dst)
             continue
 
     if migrated_from is not None:
@@ -92,23 +94,14 @@ def _try_one_time_migrate_legacy_dirs(dst: Path) -> None:
             dst.mkdir(parents=True, exist_ok=True)
             marker.write_text(str(migrated_from), encoding="utf-8")
         except Exception:
-            pass
+            logger.warning("failed to write migration marker in %s", dst)
 
 
 def app_root_dir() -> Path:
-    """
-    应用“根”可写目录（用于 settings.ini、默认数据目录等）。
-
-    - Windows: %APPDATA%\\pomodoro-tray-timer
-    - macOS: ~/Library/Application Support/pomodoro-tray-timer
-    - 其他平台: ~/.local/share/pomodoro-tray-timer（尽量遵循 XDG）
-    """
-
     if sys.platform.startswith("win"):
         base = os.environ.get("APPDATA")
         if base:
             return Path(base) / app_name()
-        # 兜底：极少数环境可能没有 APPDATA
         return Path.home() / "AppData" / "Roaming" / app_name()
 
     if sys.platform == "darwin":
@@ -124,14 +117,6 @@ def settings_ini_path() -> Path:
 
 
 def data_dir() -> Path:
-    """
-    运行时数据目录（用于 config/history 等）。
-
-    Windows 安装包版本可通过 `%APPDATA%\\pomodoro-tray-timer\\settings.ini` 配置：
-    - [app]
-      DataDir=C:\\...\\somewhere
-    """
-
     cfg_path = settings_ini_path()
     if cfg_path.exists():
         parser = configparser.ConfigParser()
@@ -143,7 +128,7 @@ def data_dir() -> Path:
                 p = Path(expanded).expanduser()
                 return p
         except Exception:
-            pass
+            logger.warning("failed to parse settings.ini for DataDir")
 
     return app_root_dir()
 
@@ -157,8 +142,7 @@ def default_history_path() -> Path:
 
 
 def legacy_data_dir() -> Path:
-    # 兼容旧版本相对路径 data/
-    return Path("data")
+    return Path(__file__).resolve().parent.parent / "data"
 
 
 def legacy_config_path() -> Path:
@@ -167,4 +151,3 @@ def legacy_config_path() -> Path:
 
 def legacy_history_path() -> Path:
     return legacy_data_dir() / "history.csv"
-

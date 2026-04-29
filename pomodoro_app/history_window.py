@@ -11,15 +11,19 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from .i18n import _
 from .models import CSV_HEADER, SessionRecord
 from .storage_csv import CsvStorage, DailyStats
+
+_RECORD_HEADERS = [_("日期"), _("集中精力"), _("短暂休息"), _("长休息"), _("开始时间"), _("结束时间")]
+_STATS_HEADERS = [_("日期"), _("专注时钟数"), _("专注总分钟")]
 
 
 def _qdate_to_date(d: QDate) -> date:
@@ -48,33 +52,33 @@ class DateRange:
 
 
 class HistoryWindow(QDialog):
-    def __init__(self, storage: CsvStorage, parent=None) -> None:
+    def __init__(self, storage: CsvStorage, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._storage = storage
 
-        self.setWindowTitle("历史记录")
+        self.setWindowTitle(_("历史记录"))
         self.setMinimumWidth(860)
         self.setMinimumHeight(520)
 
         self._from_date = QDateEdit()
         self._from_date.setCalendarPopup(True)
         self._from_date.setDisplayFormat("yyyy-MM-dd")
-        self._from_date.setSpecialValueText("开始日期")
+        self._from_date.setSpecialValueText(_("开始日期"))
         self._from_date.setDate(QDate.currentDate().addDays(-7))
 
         self._to_date = QDateEdit()
         self._to_date.setCalendarPopup(True)
         self._to_date.setDisplayFormat("yyyy-MM-dd")
-        self._to_date.setSpecialValueText("结束日期")
+        self._to_date.setSpecialValueText(_("结束日期"))
         self._to_date.setDate(QDate.currentDate())
 
-        self._btn_apply = QPushButton("筛选/刷新")
-        self._btn_clear = QPushButton("清除筛选")
+        self._btn_apply = QPushButton(_("筛选/刷新"))
+        self._btn_clear = QPushButton(_("清除筛选"))
 
         top = QHBoxLayout()
-        top.addWidget(QLabel("从"))
+        top.addWidget(QLabel(_("从")))
         top.addWidget(self._from_date)
-        top.addWidget(QLabel("到"))
+        top.addWidget(QLabel(_("到")))
         top.addWidget(self._to_date)
         top.addSpacing(12)
         top.addWidget(self._btn_apply)
@@ -93,8 +97,8 @@ class HistoryWindow(QDialog):
         stats_layout = QVBoxLayout(stats_tab)
         stats_layout.addWidget(self._stats_table)
 
-        self._tabs.addTab(records_tab, "记录明细")
-        self._tabs.addTab(stats_tab, "每日统计")
+        self._tabs.addTab(records_tab, _("记录明细"))
+        self._tabs.addTab(stats_tab, _("每日统计"))
 
         root = QVBoxLayout(self)
         root.addLayout(top)
@@ -108,7 +112,7 @@ class HistoryWindow(QDialog):
     def _build_records_table(self) -> QTableWidget:
         table = QTableWidget()
         table.setColumnCount(len(CSV_HEADER))
-        table.setHorizontalHeaderLabels(CSV_HEADER)
+        table.setHorizontalHeaderLabels(_RECORD_HEADERS)
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -119,7 +123,7 @@ class HistoryWindow(QDialog):
     def _build_stats_table(self) -> QTableWidget:
         table = QTableWidget()
         table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["日期", "专注时钟数", "专注总分钟"])
+        table.setHorizontalHeaderLabels(_STATS_HEADERS)
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -154,11 +158,13 @@ class HistoryWindow(QDialog):
 
     def _render_records(self, records: list[SessionRecord]) -> None:
         self._records_table.setRowCount(len(records))
+        # 第 1~3 列为数值列（集中精力，短暂休息，长休息），右对齐
+        right_align_cols = {1, 2, 3}
         for i, r in enumerate(records):
             row = r.to_csv_row()
             for j, col in enumerate(CSV_HEADER):
                 item = QTableWidgetItem(row.get(col, ""))
-                if col in ("集中精力", "短暂休息", "长休息"):
+                if j in right_align_cols:
                     item.setTextAlignment(int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter))
                 self._records_table.setItem(i, j, item)
         self._records_table.resizeColumnsToContents()
@@ -170,4 +176,3 @@ class HistoryWindow(QDialog):
             self._stats_table.setItem(i, 1, QTableWidgetItem(str(s.focus_count)))
             self._stats_table.setItem(i, 2, QTableWidgetItem(str(s.focus_minutes)))
         self._stats_table.resizeColumnsToContents()
-

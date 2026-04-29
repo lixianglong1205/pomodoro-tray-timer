@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 
 from .timer_engine import Phase, PhaseFinished
-
 
 CSV_HEADER = ["日期", "集中精力", "短暂休息", "长休息", "开始时间", "结束时间"]
 
@@ -19,7 +17,7 @@ class SessionRecord:
     end_time: str  # YYYY-MM-DD HH:MM:SS
 
     @staticmethod
-    def from_phase_finished(finished: PhaseFinished) -> "SessionRecord":
+    def from_phase_finished(finished: PhaseFinished) -> SessionRecord:
         date = finished.started_at.date().isoformat()
         start_time = finished.started_at.strftime("%Y-%m-%d %H:%M:%S")
         end_time = finished.finished_at.strftime("%Y-%m-%d %H:%M:%S")
@@ -55,7 +53,7 @@ class SessionRecord:
         }
 
     @staticmethod
-    def from_csv_row(row: dict[str, str]) -> "SessionRecord":
+    def from_csv_row(row: dict[str, str]) -> SessionRecord:
         def parse_int(x: str) -> int | None:
             x = (x or "").strip()
             if not x:
@@ -72,6 +70,4 @@ class SessionRecord:
         )
 
 
-def parse_dt_local(value: str) -> datetime:
-    return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
 

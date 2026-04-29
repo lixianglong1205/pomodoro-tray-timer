@@ -38,10 +38,8 @@ def main() -> int:
     def on_phase_finished(finished: PhaseFinished) -> None:
         notifier.notify("冒烟测试：阶段结束", f"phase={finished.phase.value}, planned={finished.planned_minutes}min")
         done["notified"] = True
-        storage.append(
-            # Reuse the normal record creation path for parity.
-            __import__("pomodoro_app.models", fromlist=["SessionRecord"]).SessionRecord.from_phase_finished(finished)
-        )
+        from pomodoro_app.models import SessionRecord  # fmt: skip (late import to avoid QApp init ordering)
+        storage.append(SessionRecord.from_phase_finished(finished))
         done["persisted"] = True
         QTimer.singleShot(250, app.quit)
 
