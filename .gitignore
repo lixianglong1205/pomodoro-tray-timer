@@ -18,3 +18,6 @@ logs/
 
 # cursor
 .cursor/
+
+# VSCode (local editor settings)
+.vscode/
