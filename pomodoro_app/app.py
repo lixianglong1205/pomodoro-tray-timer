@@ -133,7 +133,8 @@ def run() -> int:
     def notify_phase_finished(finished: PhaseFinished) -> None:
         if finished.phase == Phase.focus:
             total = engine.config.long_break_every_focus
-            title = _("第{n}/{total}次集中精力").format(n=finished.focus_index, total=total)
+            n = ((max(1, finished.focus_index) - 1) % max(1, total)) + 1
+            title = _("第{n}/{total}次集中精力").format(n=n, total=total)
         elif finished.phase == Phase.short_break:
             title = _("短暂休息结束")
         elif finished.phase == Phase.long_break:

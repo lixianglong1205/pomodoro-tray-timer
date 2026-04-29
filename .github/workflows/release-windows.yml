@@ -37,16 +37,26 @@ jobs:
       - name: Sync dependencies
         run: uv sync --all-groups --locked
 
-      - name: Build app (Nuitka)
-        shell: pwsh
-        run: |
-          ./scripts/build-windows.ps1
+      - name: Restore Nuitka compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/nuitka-ci
+          key: ${{ runner.os }}-nuitka-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nuitka-
 
       - name: Install Inno Setup 6 (Chocolatey)
         shell: pwsh
         run: |
           choco --version
           choco install innosetup --no-progress -y
+
+      - name: Build app (Nuitka)
+        shell: pwsh
+        env:
+          NUITKA_CACHE_DIR: ~/.cache/nuitka-ci
+        run: |
+          ./scripts/build-windows.ps1
 
       - name: ISCC diagnostics
         shell: pwsh

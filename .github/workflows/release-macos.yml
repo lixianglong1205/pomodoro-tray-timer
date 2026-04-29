@@ -37,13 +37,16 @@ jobs:
       - name: Sync dependencies
         run: uv sync --all-groups --locked
 
+      - name: Restore Nuitka compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/nuitka-ci
+          key: ${{ runner.os }}-nuitka-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nuitka-
+
       - name: Build app icon (.icns)
         run: uv run python scripts/ico_to_icns.py assets/icon-red-tomato.ico assets/icon-red-tomato.icns
-
-      - name: Build app (.app, Nuitka)
-        run: |
-          chmod +x ./scripts/build-macos.sh
-          ./scripts/build-macos.sh
 
       - name: Install create-dmg (Homebrew)
         run: |
@@ -53,6 +56,13 @@ jobs:
           else
             brew install create-dmg
           fi
+
+      - name: Build app (.app, Nuitka)
+        env:
+          NUITKA_CACHE_DIR: ~/.cache/nuitka-ci
+        run: |
+          chmod +x ./scripts/build-macos.sh
+          ./scripts/build-macos.sh
 
       - name: Build DMG (create-dmg with retry)
         run: |

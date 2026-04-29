@@ -85,7 +85,6 @@ $nuitkaArgs = @(
   '--standalone',
   '--enable-plugins=pyside6',
   '--assume-yes-for-downloads',
-  '--disable-dll-dependency-cache',
   '--windows-console-mode=disable',
   "--output-dir=$OutputDir",
   "--output-filename=$AppName"
