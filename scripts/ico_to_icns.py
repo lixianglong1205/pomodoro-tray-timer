@@ -9,7 +9,6 @@ from pathlib import Path
 
 from PIL import Image
 
-
 _ICONSET_SPECS: list[tuple[str, int]] = [
     ("icon_16x16.png", 16),
     ("icon_16x16@2x.png", 32),
@@ -64,11 +63,13 @@ def _best_ico_image(path: Path) -> Image.Image:
     return best
 
 
-def _ensure_iconutil() -> None:
+def _ensure_iconutil() -> str:
     if platform.system() != "Darwin":
         raise RuntimeError("This script must be run on macOS (needs 'iconutil').")
-    if shutil.which("iconutil") is None:
+    iconutil = shutil.which("iconutil")
+    if iconutil is None:
         raise RuntimeError("Command not found: iconutil (expected on macOS).")
+    return iconutil
 
 
 def _write_iconset(source: Image.Image, iconset_dir: Path) -> None:
@@ -79,10 +80,10 @@ def _write_iconset(source: Image.Image, iconset_dir: Path) -> None:
         resized.save(out_path, format="PNG")
 
 
-def _convert_iconset_to_icns(iconset_dir: Path, output_icns: Path) -> None:
+def _convert_iconset_to_icns(iconutil: str, iconset_dir: Path, output_icns: Path) -> None:
     output_icns.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["iconutil", "-c", "icns", str(iconset_dir), "-o", str(output_icns)],
+    subprocess.run(  # noqa: S603
+        [iconutil, "-c", "icns", str(iconset_dir), "-o", str(output_icns)],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -92,7 +93,7 @@ def _convert_iconset_to_icns(iconset_dir: Path, output_icns: Path) -> None:
 
 def main(argv: list[str]) -> int:
     args = _parse_args(argv)
-    _ensure_iconutil()
+    iconutil = _ensure_iconutil()
 
     input_ico: Path = args.input_ico
     output_icns: Path = args.output_icns
@@ -112,7 +113,7 @@ def main(argv: list[str]) -> int:
 
     try:
         _write_iconset(base, iconset_dir)
-        _convert_iconset_to_icns(iconset_dir, output_icns)
+        _convert_iconset_to_icns(iconutil, iconset_dir, output_icns)
     finally:
         if not args.keep_iconset and iconset_dir.exists():
             shutil.rmtree(iconset_dir)

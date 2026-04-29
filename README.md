@@ -29,7 +29,9 @@
   - 设置...
   - 打开历史记录
   - 退出
-  - **macOS 说明**：NSStatusItem 绑定原生菜单会让任意点击都弹菜单，因此 macOS 下未调用 `setContextMenu`，改为在接收到 `ActivationReason.Context` 时手动弹出；同时将进程设为 `NSApplicationActivationPolicyAccessory`（等价 `LSUIElement=1`）并调用 `activateIgnoringOtherApps_`，使得在其他 App 前台时右键也能把菜单置于最前，且不会闪现桌面
+  - **macOS 说明**：NSStatusItem 绑定原生菜单会让任意点击都弹菜单，因此 macOS 下未调用 `setContextMenu`，改为在接收到 `ActivationReason.Context` 时手动弹出。
+    - 默认会显示 **Dock 图标**（`NSApplicationActivationPolicyRegular`）。
+    - 若你希望像“纯菜单栏应用”一样 **不显示 Dock 图标**，可在启动前设置环境变量：`POMODORO_MACOS_SHOW_DOCK_ICON=0`（此时使用 `NSApplicationActivationPolicyAccessory`，等价 `LSUIElement=1`）。
 - **系统通知**
   - 阶段结束（专注/短休/长休）触发 Windows Toast 通知
   - Toast 通知会尝试**跟随系统提示音**播放结束音效（依赖 Windows 通知设置，见下文“通知音效说明/FAQ”）
