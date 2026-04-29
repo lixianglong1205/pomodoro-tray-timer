@@ -268,6 +268,10 @@ class TimerEngine(QObject):
 
         if self._phase == Phase.focus:
             self._focus_completed_in_cycle += 1
+        elif self._phase == Phase.long_break:
+            # Long break marks the end of a pomodoro cycle; reset the cycle counter so
+            # the next focus starts from 1/{long_break_every_focus}.
+            self._focus_completed_in_cycle = 0
 
         pending = self._suggest_next(self._phase, self._focus_completed_in_cycle)
         self._pending_phase = pending

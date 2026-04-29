@@ -104,6 +104,32 @@ def case_natural_finish_break_then_left_click_starts_focus() -> None:
     assert engine.pending_phase is None
 
 
+def case_long_break_finishes_resets_cycle_counter() -> None:
+    engine = _new_engine()
+
+    # Finish 1st focus -> short break
+    engine.start_focus()
+    _force_natural_finish(engine)
+    assert engine.pending_phase in (Phase.short_break, Phase.long_break)
+    _simulate_tray_left_click(engine)  # start break
+    _force_natural_finish(engine)  # finish break
+    _simulate_tray_left_click(engine)  # start focus
+
+    # Finish 2nd focus -> long break (long_break_every_focus=2)
+    _force_natural_finish(engine)
+    assert engine.pending_phase == Phase.long_break
+    assert engine.focus_completed_in_cycle == 2
+
+    _simulate_tray_left_click(engine)  # start long break
+    _force_natural_finish(engine)  # finish long break
+    assert engine.pending_phase == Phase.focus
+    assert engine.focus_completed_in_cycle == 0
+
+    _simulate_tray_left_click(engine)  # start focus again
+    _force_natural_finish(engine)  # finish focus
+    assert engine.focus_completed_in_cycle == 1
+
+
 def main() -> None:
     # Ensure Qt timer infrastructure is available for QTimer.start/stop.
     _app = QCoreApplication([])
@@ -114,6 +140,7 @@ def main() -> None:
         case_stop_focus_then_left_click_starts_focus,
         case_natural_finish_focus_then_left_click_starts_break,
         case_natural_finish_break_then_left_click_starts_focus,
+        case_long_break_finishes_resets_cycle_counter,
     ]
 
     for t in tests:

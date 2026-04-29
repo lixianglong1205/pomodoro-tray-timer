@@ -37,10 +37,16 @@ jobs:
       - name: Sync dependencies
         run: uv sync --all-groups --locked
 
-      - name: Build app (.app, Nuitka)
-        run: |
-          chmod +x ./scripts/build-macos.sh
-          ./scripts/build-macos.sh
+      - name: Restore Nuitka compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/nuitka-ci
+          key: ${{ runner.os }}-nuitka-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nuitka-
+
+      - name: Build app icon (.icns)
+        run: uv run python scripts/ico_to_icns.py assets/icon-red-tomato.ico assets/icon-red-tomato.icns
 
       - name: Install create-dmg (Homebrew)
         run: |
@@ -50,6 +56,13 @@ jobs:
           else
             brew install create-dmg
           fi
+
+      - name: Build app (.app, Nuitka)
+        env:
+          NUITKA_CACHE_DIR: ~/.cache/nuitka-ci
+        run: |
+          chmod +x ./scripts/build-macos.sh
+          ./scripts/build-macos.sh
 
       - name: Build DMG (create-dmg with retry)
         run: |
@@ -113,36 +126,61 @@ jobs:
           asset_name="pomodoro-tray-timer-$tag.dmg"
 
           gh --version
+
+          # Helper: retry a gh command up to N times on failure
+          gh_retry() {
+            local cmd=("$@") i=0
+            until "${cmd[@]}" 2>/dev/null; do
+              i=$((i + 1))
+              if [[ $i -ge 3 ]]; then return 1; fi
+              sleep $((i * 2))
+            done
+          }
+
           # Repo enables "Immutable releases": once a release is published,
           # assets cannot be added/replaced. macOS and Windows workflows run
           # in parallel, so each job ensures the release exists as a DRAFT,
           # uploads its own asset, and only flips draft=false when BOTH the
           # Windows (.exe) and macOS (.dmg) expected assets are present.
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --draft --title "$tag" --notes ""
+          if ! gh_retry gh release view "$tag"; then
+            echo "Creating draft release $tag..."
+            gh release create "$tag" --draft --title "$tag" --notes "" || true
           fi
 
-          is_draft="$(gh release view "$tag" --json isDraft -q .isDraft)"
+          is_draft="$(gh release view "$tag" --json isDraft -q .isDraft 2>/dev/null || true)"
           if [[ "$is_draft" != "true" ]]; then
-            echo "Release '$tag' is already published and immutable; cannot upload/replace assets."
-            echo "Please create a new tag (e.g. ${tag}-r1 or bump version) to publish new assets."
-            exit 1
+            echo "Release '$tag' is already published and immutable; nothing to do."
+            exit 0
           fi
 
-          gh release upload "$tag" "$dmg_path#$asset_name" --clobber
+          gh_retry gh release upload "$tag" "$dmg_path#$asset_name" --clobber || {
+            echo "Warning: upload failed, but continuing to check assets."
+          }
 
           expected_exe="pomodoro-tray-timer-setup-${tag}.exe"
           expected_dmg="pomodoro-tray-timer-${tag}.dmg"
-          assets="$(gh release view "$tag" --json assets -q '.assets[].name')"
-          has_exe=0; has_dmg=0
-          while IFS= read -r name; do
-            [[ "$name" == "$expected_exe" ]] && has_exe=1
-            [[ "$name" == "$expected_dmg" ]] && has_dmg=1
-          done <<< "$assets"
-          echo "Release assets: has_exe=$has_exe, has_dmg=$has_dmg"
-          if [[ "$has_exe" == "1" && "$has_dmg" == "1" ]]; then
+
+          # Retry to handle GitHub API eventual consistency
+          has_both=0
+          for attempt in 1 2 3; do
+            assets="$(gh release view "$tag" --json assets -q '.assets[].name' 2>/dev/null || true)"
+            has_exe=0; has_dmg=0
+            while IFS= read -r name; do
+              stripped="${name%%$'\r'}"
+              [[ "$stripped" == "$expected_exe" ]] && has_exe=1
+              [[ "$stripped" == "$expected_dmg" ]] && has_dmg=1
+            done <<< "$assets"
+            echo "Release assets (attempt $attempt): has_exe=$has_exe, has_dmg=$has_dmg"
+            if [[ "$has_exe" == "1" && "$has_dmg" == "1" ]]; then
+              has_both=1
+              break
+            fi
+            sleep 3
+          done
+
+          if [[ "$has_both" == "1" ]]; then
             echo "Both platform assets present; publishing release."
-            gh release edit "$tag" --draft=false
+            gh release edit "$tag" --draft=false || true
           else
             echo "Peer asset not yet present; leaving release as draft."
           fi

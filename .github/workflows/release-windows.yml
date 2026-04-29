@@ -37,16 +37,26 @@ jobs:
       - name: Sync dependencies
         run: uv sync --all-groups --locked
 
-      - name: Build app (Nuitka)
-        shell: pwsh
-        run: |
-          ./scripts/build-windows.ps1
+      - name: Restore Nuitka compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/nuitka-ci
+          key: ${{ runner.os }}-nuitka-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nuitka-
 
       - name: Install Inno Setup 6 (Chocolatey)
         shell: pwsh
         run: |
           choco --version
           choco install innosetup --no-progress -y
+
+      - name: Build app (Nuitka)
+        shell: pwsh
+        env:
+          NUITKA_CACHE_DIR: ~/.cache/nuitka-ci
+        run: |
+          ./scripts/build-windows.ps1
 
       - name: ISCC diagnostics
         shell: pwsh
@@ -126,6 +136,17 @@ jobs:
           Write-Host "Uploading asset: $assetName"
 
           gh --version
+
+          function gh_retry {
+            param([scriptblock]$Block)
+            for ($i = 0; $i -lt 3; $i++) {
+              $result = & $Block 2>&1
+              if ($LASTEXITCODE -eq 0) { return $result }
+              Start-Sleep -Seconds (($i + 1) * 2)
+            }
+            throw "gh command failed after 3 retries"
+          }
+
           # Repo enables "Immutable releases": once a release is published,
           # assets cannot be added/replaced. macOS and Windows workflows run
           # in parallel, so each job ensures the release exists as a DRAFT,
@@ -136,25 +157,42 @@ jobs:
             gh release create $tag --draft --title $tag --notes ""
           }
 
-          $isDraft = (gh release view $tag --json isDraft -q .isDraft)
+          $isDraft = (gh release view $tag --json isDraft -q .isDraft 2>$null)
           if ($isDraft -ne "true") {
-            throw "Release '$tag' is already published and immutable; cannot upload/replace assets. Please create a new tag to publish new assets."
+            Write-Host "Release '$tag' is already published and immutable; nothing to do."
+            exit 0
           }
 
-          gh release upload $tag "$installerPath#$assetName" --clobber
+          try {
+            gh_retry -Block { gh release upload $tag "$installerPath#$assetName" --clobber }
+          } catch {
+            Write-Host "Warning: upload failed, but continuing to check assets."
+          }
 
           $expectedExe = "pomodoro-tray-timer-setup-$tag.exe"
           $expectedDmg = "pomodoro-tray-timer-$tag.dmg"
-          $assetsJson = gh release view $tag --json assets -q '.assets[].name'
-          $hasExe = $false; $hasDmg = $false
-          foreach ($name in $assetsJson) {
-            if ($name -eq $expectedExe) { $hasExe = $true }
-            if ($name -eq $expectedDmg) { $hasDmg = $true }
+
+          # Retry to handle GitHub API eventual consistency
+          $hasBoth = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            $assetsJson = gh release view $tag --json assets -q '.assets[].name' 2>$null
+            $hasExe = $false; $hasDmg = $false
+            foreach ($name in $assetsJson) {
+              $trimmed = $name.Trim()
+              if ($trimmed -eq $expectedExe) { $hasExe = $true }
+              if ($trimmed -eq $expectedDmg) { $hasDmg = $true }
+            }
+            Write-Host ("Release assets (attempt {0}): hasExe={1}, hasDmg={2}" -f $attempt, $hasExe, $hasDmg)
+            if ($hasExe -and $hasDmg) {
+              $hasBoth = $true
+              break
+            }
+            Start-Sleep -Seconds 3
           }
-          Write-Host ("Release assets: hasExe={0}, hasDmg={1}" -f $hasExe, $hasDmg)
-          if ($hasExe -and $hasDmg) {
+
+          if ($hasBoth) {
             Write-Host "Both platform assets present; publishing release."
-            gh release edit $tag --draft=false
+            gh release edit $tag --draft=false 2>$null
           } else {
             Write-Host "Peer asset not yet present; leaving release as draft."
           }

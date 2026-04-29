@@ -1,0 +1,64 @@
+name: Finalize Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to finalize (e.g., v0.3.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check release and finalize
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          tag="${{ github.event.inputs.tag }}"
+
+          # Check release exists
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Release '$tag' does not exist."
+            exit 1
+          fi
+
+          # Check is still a draft
+          is_draft="$(gh release view "$tag" --json isDraft -q .isDraft)"
+          if [[ "$is_draft" != "true" ]]; then
+            echo "Release '$tag' is already published. Nothing to do."
+            exit 0
+          fi
+
+          # List assets
+          assets="$(gh release view "$tag" --json assets -q '.assets[].name')"
+          expected_dmg="pomodoro-tray-timer-${tag}.dmg"
+          expected_exe="pomodoro-tray-timer-setup-${tag}.exe"
+          has_dmg=0
+          has_exe=0
+          while IFS= read -r name; do
+            [[ "$name" == "$expected_dmg" ]] && has_dmg=1
+            [[ "$name" == "$expected_exe" ]] && has_exe=1
+          done <<< "$assets"
+
+          if [[ "$has_dmg" == "0" ]]; then
+            echo "::warning::Missing asset: $expected_dmg"
+          fi
+          if [[ "$has_exe" == "0" ]]; then
+            echo "::warning::Missing asset: $expected_exe"
+          fi
+
+          if [[ "$has_dmg" == "1" && "$has_exe" == "1" ]]; then
+            echo "Both platform assets present; publishing release '$tag'."
+            gh release edit "$tag" --draft=false
+            echo "::notice::Release '$tag' has been published."
+          else
+            echo "::error::Cannot publish: one or both platform assets are missing."
+            echo "Please re-run the failed platform workflow first."
+            exit 1
+          fi

@@ -38,6 +38,7 @@ uv run python -m nuitka \
   --assume-yes-for-downloads \
   --disable-console \
   --macos-create-app-bundle \
+  --macos-app-icon="assets/icon-red-tomato.icns" \
   --output-dir="$OUTPUT_DIR" \
   --output-filename="$APP_NAME"
 

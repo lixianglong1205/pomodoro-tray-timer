@@ -26,15 +26,39 @@ def _is_macos() -> bool:
     return platform.system().lower() == "darwin"
 
 
-def _set_macos_accessory_activation_policy() -> None:
-    if not _is_macos():
-        return
-    try:
-        from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+def _env_truthy(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "y", "on"}:
+        return True
+    if value in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
 
-        NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+
+def _set_macos_activation_policy() -> bool:
+    if not _is_macos():
+        return False
+    try:
+        from AppKit import (
+            NSApplication,
+            NSApplicationActivationPolicyAccessory,
+            NSApplicationActivationPolicyRegular,
+        )
+
+        show_dock_icon = _env_truthy("POMODORO_MACOS_SHOW_DOCK_ICON", default=True)
+        policy = (
+            NSApplicationActivationPolicyRegular
+            if show_dock_icon
+            else NSApplicationActivationPolicyAccessory
+        )
+        NSApplication.sharedApplication().setActivationPolicy_(policy)
+        return not show_dock_icon
     except Exception:
         logger.warning("failed to set macOS accessory activation policy")
+        return False
 
 
 def _report_tray_unavailable(app: QApplication) -> None:
@@ -59,7 +83,7 @@ def _report_tray_unavailable(app: QApplication) -> None:
 def run() -> int:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
-    _set_macos_accessory_activation_policy()
+    is_accessory_policy = _set_macos_activation_policy()
 
     if not QSystemTrayIcon.isSystemTrayAvailable():
         _report_tray_unavailable(app)
@@ -97,7 +121,7 @@ def run() -> int:
             tray.hide()
         engine.stop()
         app.quit()
-        if _is_macos():
+        if _is_macos() and is_accessory_policy:
             # app.quit() may not terminate NSRunLoop under Accessory policy.
             # Schedule forced exit as safety net instead of immediate os._exit,
             # giving Qt a chance to clean up first.
@@ -109,7 +133,8 @@ def run() -> int:
     def notify_phase_finished(finished: PhaseFinished) -> None:
         if finished.phase == Phase.focus:
             total = engine.config.long_break_every_focus
-            title = _("第{n}/{total}次集中精力").format(n=finished.focus_index, total=total)
+            n = ((max(1, finished.focus_index) - 1) % max(1, total)) + 1
+            title = _("第{n}/{total}次集中精力").format(n=n, total=total)
         elif finished.phase == Phase.short_break:
             title = _("短暂休息结束")
         elif finished.phase == Phase.long_break:
@@ -142,7 +167,7 @@ def run() -> int:
 
     # macOS 上正常退出路径已由 on_quit 的 os._exit 处理；这里作为兜底，
     # 防止 app.exec 意外返回时挂在 PyObjC/NSRunLoop 清理上。
-    if _is_macos():
+    if _is_macos() and is_accessory_policy:
         os._exit(int(exit_code) if exit_code is not None else 0)
 
     return exit_code
