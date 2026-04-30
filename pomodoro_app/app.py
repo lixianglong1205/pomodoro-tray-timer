@@ -48,7 +48,10 @@ def _set_macos_activation_policy() -> bool:
             NSApplicationActivationPolicyRegular,
         )
 
-        show_dock_icon = _env_truthy("POMODORO_MACOS_SHOW_DOCK_ICON", default=True)
+        # 托盘应用在 macOS 上默认更符合 Accessory（不显示 Dock 图标）形态：
+        # - 便于后续通过 activateIgnoringOtherApps_ 在任意全屏 Space 弹出菜单
+        # - 避免像普通 App 一样切换/抢焦点造成的“闪桌面”体验
+        show_dock_icon = _env_truthy("POMODORO_MACOS_SHOW_DOCK_ICON", default=False)
         policy = (
             NSApplicationActivationPolicyRegular
             if show_dock_icon
@@ -98,6 +101,7 @@ def run() -> int:
     tray: TrayController | None = None
     notifier: Notifier | None = None
     history: HistoryWindow | None = None
+    settings: SettingsWindow | None = None
 
     def on_open_history() -> None:
         nonlocal history
@@ -108,10 +112,12 @@ def run() -> int:
         history.activateWindow()
 
     def on_open_settings() -> None:
-        w = SettingsWindow(engine)
-        w.show()
-        w.raise_()
-        w.activateWindow()
+        nonlocal settings
+        if settings is None:
+            settings = SettingsWindow(engine)
+        settings.show()
+        settings.raise_()
+        settings.activateWindow()
 
     def on_quit() -> None:
         if tray is not None:
