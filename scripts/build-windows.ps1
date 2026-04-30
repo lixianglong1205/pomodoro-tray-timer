@@ -86,6 +86,9 @@ $nuitkaArgs = @(
   'main.py',
   '--standalone',
   '--enable-plugins=pyside6',
+  # i18n JSON files are loaded at runtime from pomodoro_app/i18n/.
+  # In standalone builds they must be explicitly included as data files.
+  '--include-data-files=pomodoro_app/i18n/*.json=pomodoro_app/i18n/',
   '--assume-yes-for-downloads',
   '--windows-console-mode=disable',
   "--output-dir=$OutputDir",
