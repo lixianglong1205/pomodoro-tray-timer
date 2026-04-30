@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -46,6 +45,7 @@ class SettingsWindow(QDialog):
         self._lang_hint.hide()
 
         form = QFormLayout()
+        self._form = form
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
         self._spin_focus = self._make_spinbox()
@@ -54,14 +54,19 @@ class SettingsWindow(QDialog):
         self._spin_long_every = self._make_every_spinbox()
 
         form.addRow(_("集中精力（分钟）"), self._spin_focus)
+        self._lbl_focus = form.labelForField(self._spin_focus)
         form.addRow(_("短暂休息（分钟）"), self._spin_short)
+        self._lbl_short = form.labelForField(self._spin_short)
         form.addRow(_("长休息（分钟）"), self._spin_long)
+        self._lbl_long = form.labelForField(self._spin_long)
         form.addRow(_("长休息频率（每完成 n 次专注）"), self._spin_long_every)
+        self._lbl_long_every = form.labelForField(self._spin_long_every)
 
         self._combo_lang = QComboBox()
         for code, label in _LANGUAGES:
             self._combo_lang.addItem(_(label), code)
         form.addRow(_("语言"), self._combo_lang)
+        self._lbl_lang = form.labelForField(self._combo_lang)
         self._combo_lang.currentIndexChanged.connect(self._update_lang_hint)
 
         self._btn_default = QPushButton(_("恢复默认"))
@@ -87,6 +92,39 @@ class SettingsWindow(QDialog):
         root.addLayout(buttons)
 
         self._sync_from_engine()
+
+    def retranslate_ui(self) -> None:
+        self.setWindowTitle(_("设置"))
+        self._hint.setText(_('修改后点击“保存”即可立即生效。'))
+
+        if self._lbl_focus is not None:
+            self._lbl_focus.setText(_("集中精力（分钟）"))
+        if self._lbl_short is not None:
+            self._lbl_short.setText(_("短暂休息（分钟）"))
+        if self._lbl_long is not None:
+            self._lbl_long.setText(_("长休息（分钟）"))
+        if self._lbl_long_every is not None:
+            self._lbl_long_every.setText(_("长休息频率（每完成 n 次专注）"))
+        if self._lbl_lang is not None:
+            self._lbl_lang.setText(_("语言"))
+
+        self._btn_default.setText(_("恢复默认"))
+        self._btn_cancel.setText(_("取消"))
+        self._btn_save.setText(_("保存"))
+
+        # 语言下拉项本身也需要翻译（保持当前选择不变）
+        current_lang = self._current_language()
+        blocker = QSignalBlocker(self._combo_lang)
+        try:
+            self._combo_lang.clear()
+            for code, label in _LANGUAGES:
+                self._combo_lang.addItem(_(label), code)
+            for i in range(self._combo_lang.count()):
+                if self._combo_lang.itemData(i) == current_lang:
+                    self._combo_lang.setCurrentIndex(i)
+                    break
+        finally:
+            del blocker
 
     def _make_spinbox(self) -> QSpinBox:
         spin = QSpinBox(self)
@@ -120,12 +158,8 @@ class SettingsWindow(QDialog):
         super().showEvent(event)
 
     def _update_lang_hint(self) -> None:
-        chosen = self._combo_lang.currentData()
-        if chosen != I18n.instance().language:
-            self._lang_hint.setText(_("重新启动后生效"))
-            self._lang_hint.show()
-        else:
-            self._lang_hint.hide()
+        # 语言切换现在即时生效，无需重启提示
+        self._lang_hint.hide()
 
     def _current_language(self) -> str:
         return str(self._combo_lang.currentData())
@@ -159,5 +193,6 @@ class SettingsWindow(QDialog):
             long_break_every_focus=cfg.long_break_every_focus,
         )
         if new_lang != I18n.instance().language:
-            QMessageBox.information(self, _("设置"), _("重新启动后生效"))
+            I18n.switch_language(new_lang)
+            self._engine.language_changed.emit(new_lang)
         self.accept()

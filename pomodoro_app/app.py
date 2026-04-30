@@ -48,7 +48,10 @@ def _set_macos_activation_policy() -> bool:
             NSApplicationActivationPolicyRegular,
         )
 
-        show_dock_icon = _env_truthy("POMODORO_MACOS_SHOW_DOCK_ICON", default=True)
+        # 托盘应用在 macOS 上默认更符合 Accessory（不显示 Dock 图标）形态：
+        # - 便于后续通过 activateIgnoringOtherApps_ 在任意全屏 Space 弹出菜单
+        # - 避免像普通 App 一样切换/抢焦点造成的“闪桌面”体验
+        show_dock_icon = _env_truthy("POMODORO_MACOS_SHOW_DOCK_ICON", default=False)
         policy = (
             NSApplicationActivationPolicyRegular
             if show_dock_icon
@@ -161,6 +164,15 @@ def run() -> int:
         storage.append(record)
 
     engine.phase_finished.connect(persist_phase_finished)
+
+    def on_language_changed(_lang: str) -> None:
+        if history is not None:
+            history.retranslate_ui()
+        if settings is not None:
+            settings.retranslate_ui()
+
+    engine.language_changed.connect(on_language_changed)
+
     tray.show()
 
     exit_code = app.exec()

@@ -77,7 +77,9 @@ if (-not (Test-AsciiPath $repoRoot)) {
 
 Set-Location $buildRoot
 
-uv sync --all-groups
+if (-not $env:CI) {
+  uv sync --all-groups
+}
 
 $nuitkaArgs = @(
   '-m', 'nuitka',

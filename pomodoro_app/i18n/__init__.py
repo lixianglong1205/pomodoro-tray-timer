@@ -29,6 +29,14 @@ class Translator:
         cls._inst = cls(language)
 
     @classmethod
+    def switch_language(cls, language: str) -> None:
+        """Switch translator to a new language at runtime (no restart needed)."""
+        if cls._inst is None:
+            cls.setup(language)
+        else:
+            cls._inst.__init__(language)
+
+    @classmethod
     def instance(cls) -> Translator:
         if cls._inst is None:
             cls._inst = cls("zh")

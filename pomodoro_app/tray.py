@@ -56,6 +56,9 @@ class TrayController(QObject):
         self._theme = theme or TrayTheme()
         self._icon_size = icon_size
         self._is_macos = platform.system().lower() == "darwin"
+        self._on_open_history = on_open_history
+        self._on_open_settings = on_open_settings
+        self._on_quit = on_quit
 
         self._tray = QSystemTrayIcon(self)
         self._tray.setToolTip(_("番茄钟"))
@@ -63,7 +66,22 @@ class TrayController(QObject):
 
         self._tray.activated.connect(self._on_tray_activated)
 
+        self._install_menu(self._create_menu())
+
+        self._last_drawn_minute: int | None = None
+        self._last_phase: Phase = Phase.idle
+        self._last_paused: bool = False
+
+        self._engine.tick.connect(self._on_tick)
+        self._engine.phase_changed.connect(self._on_phase_changed)
+        self._engine.phase_finished.connect(self._on_phase_finished)
+        self._engine.paused_changed.connect(self._on_paused_changed)
+        self._engine.stopped.connect(self._on_stopped)
+        self._engine.language_changed.connect(self._on_language_changed)
+
+    def _create_menu(self) -> QMenu:
         menu = QMenu()
+
         self._menu = menu
         self._act_stop = QAction(_("终止时钟"), menu)
         self._act_pause = QAction(_("暂停"), menu)
@@ -88,12 +106,6 @@ class TrayController(QObject):
         menu.addAction(self._act_settings)
         menu.addSeparator()
         menu.addAction(self._act_quit)
-        # 在 macOS 上不调用 setContextMenu：NSStatusItem 一旦绑定原生菜单，
-        # 任何点击（包括左键）都会自动弹菜单，无法区分左右键。
-        # 改为在 _on_tray_activated 里按 reason 手动弹菜单。
-        # Windows / Linux 仍然使用原生上下文菜单以获得最佳体验。
-        if not self._is_macos:
-            self._tray.setContextMenu(menu)
 
         self._act_stop.triggered.connect(self._engine.stop)
         self._act_pause.triggered.connect(self._engine.toggle_pause)
@@ -101,19 +113,20 @@ class TrayController(QObject):
         self._act_short.triggered.connect(self._engine.start_short_break)
         self._act_long.triggered.connect(self._engine.start_long_break)
         self._act_restart.triggered.connect(self._engine.restart_cycle)
-        self._act_history.triggered.connect(on_open_history)
-        self._act_settings.triggered.connect(on_open_settings)
-        self._act_quit.triggered.connect(on_quit)
+        self._act_history.triggered.connect(self._on_open_history)
+        self._act_settings.triggered.connect(self._on_open_settings)
+        self._act_quit.triggered.connect(self._on_quit)
 
-        self._last_drawn_minute: int | None = None
-        self._last_phase: Phase = Phase.idle
-        self._last_paused: bool = False
+        return menu
 
-        self._engine.tick.connect(self._on_tick)
-        self._engine.phase_changed.connect(self._on_phase_changed)
-        self._engine.phase_finished.connect(self._on_phase_finished)
-        self._engine.paused_changed.connect(self._on_paused_changed)
-        self._engine.stopped.connect(self._on_stopped)
+    def _install_menu(self, menu: QMenu) -> None:
+        # macOS：不要绑定 setContextMenu。NSStatusItem 一旦绑定原生菜单，
+        # 任意点击（包括左键）都会弹菜单，无法区分左右键。
+        # 右键菜单在 _on_tray_activated 里手动 exec，并配合 AppKit 激活，
+        # 才能在全屏/不同 Space 下稳定显示且不“闪桌面”。
+        if self._is_macos:
+            return
+        self._tray.setContextMenu(menu)
 
     def show(self) -> None:
         if self._is_macos:
@@ -314,24 +327,30 @@ class TrayController(QObject):
             QSystemTrayIcon.ActivationReason.DoubleClick,
         ):
             self._on_left_click()
-
-    def _show_context_menu_macos(self) -> None:
-        if self._menu is None:
             return
 
+    def _show_context_menu_macos(self) -> None:
+        menu = getattr(self, "_menu", None)
+        if menu is None:
+            return
+
+        # 通过 PyObjC 静默激活当前进程，让 Qt 菜单出现在前台 App 之上。
+        # 若进程为 Accessory policy（默认），该激活不会触发常规 App 切换动画。
         try:
-            from AppKit import NSApplication
+            from AppKit import NSApplication  # type: ignore
 
             NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         except Exception:
             pass
 
+        # activateIgnoringOtherApps_ 是异步的。若紧接着进入 menu.exec() 的嵌套事件循环，
+        # 第一次点击可能被 macOS 当作“激活初始点击”吞掉，导致 QAction.triggered 不触发。
         try:
             QApplication.processEvents()
         except Exception:
             pass
 
-        self._menu.exec(QCursor.pos())
+        menu.exec(QCursor.pos())
 
     def _on_left_click(self) -> None:
         if self._engine.phase != Phase.idle:
@@ -341,6 +360,24 @@ class TrayController(QObject):
             self._engine.start_pending()
             return
         self._engine.start_focus()
+
+    def retranslate_ui(self) -> None:
+        self._tray.setToolTip(_("番茄钟"))
+        self._act_stop.setText(_("终止时钟"))
+        self._act_pause.setText(_("暂停"))
+        self._act_focus.setText(_("开始集中精力"))
+        self._act_short.setText(_("开始短暂休息"))
+        self._act_long.setText(_("开始长时间休息"))
+        self._act_restart.setText(_("重新开始番茄钟循环"))
+        self._act_history.setText(_("打开历史记录"))
+        self._act_settings.setText(_("设置..."))
+        self._act_quit.setText(_("退出"))
+        self._sync_pause_action()
+        self._refresh(force=True)
+
+    @Slot(str)
+    def _on_language_changed(self, _lang: str) -> None:
+        self.retranslate_ui()
 
     @Slot(object)
     def _on_tick(self, _run: PhaseRun) -> None:

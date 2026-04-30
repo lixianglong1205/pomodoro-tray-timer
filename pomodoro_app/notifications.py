@@ -82,7 +82,6 @@ class Notifier:
                 Qt.WindowType.Tool
                 | Qt.WindowType.FramelessWindowHint
                 | Qt.WindowType.WindowStaysOnTopHint
-                | Qt.WindowType.BypassWindowManagerHint
             )
             toast.setStyleSheet(
                 """
@@ -120,7 +119,6 @@ class Notifier:
             toast.move(x, y)
 
             toast.show()
-            toast.raise_()
 
             duration_ms = int(os.environ.get("POMODORO_QT_TOAST_DURATION_MS", "4500").strip() or "4500")
             duration_ms = max(1000, min(duration_ms, 15000))

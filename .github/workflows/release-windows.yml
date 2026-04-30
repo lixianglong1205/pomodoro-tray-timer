@@ -35,7 +35,7 @@ jobs:
         run: uv lock --check
 
       - name: Sync dependencies
-        run: uv sync --all-groups --locked
+        run: uv sync --group build --locked
 
       - name: Restore Nuitka compilation cache
         uses: actions/cache@v4
@@ -58,65 +58,17 @@ jobs:
         run: |
           ./scripts/build-windows.ps1
 
-      - name: ISCC diagnostics
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
-          Write-Host "TAG_NAME=$env:TAG_NAME"
-
-          $candidates = @(
-            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
-          )
-
-          foreach ($p in $candidates) {
-            if ($p -and (Test-Path $p)) {
-              Write-Host "Found ISCC candidate: $p"
-              try {
-                $v = (Get-Item $p).VersionInfo
-                Write-Host ("ISCC FileVersion: {0}" -f $v.FileVersion)
-                Write-Host ("ISCC ProductVersion: {0}" -f $v.ProductVersion)
-              } catch {}
-            }
-          }
-
-          try { where.exe ISCC.exe } catch {}
-          try {
-            $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-            if ($cmd) { Write-Host ("ISCC resolved to: {0}" -f $cmd.Source) }
-          } catch {}
-
-          $iscc = $null
-          foreach ($p in $candidates) { if (-not $iscc -and $p -and (Test-Path $p)) { $iscc = $p } }
-          if (-not $iscc) {
-            $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-            if ($cmd) { $iscc = $cmd.Source }
-          }
-          if ($iscc) {
-            Write-Host "ISCC /? output:"
-            & $iscc /? 2>&1 | Out-Host
-            $global:LASTEXITCODE = 0
-          } else {
-            Write-Host "ISCC.exe not found after installation."
-          }
-
-          $issPath = "installer/pomodoro-tray-timer.iss"
-          $distDir = "dist/pomodoro-tray-timer"
-          Write-Host ("Precheck: Test-Path {0} => {1}" -f $issPath, (Test-Path $issPath))
-          Write-Host ("Precheck: Test-Path {0} => {1}" -f $distDir, (Test-Path $distDir))
-
       - name: Build installer (Inno Setup)
         shell: pwsh
         run: |
           ./scripts/build-installer.ps1
 
-      - name: Upload build artifacts
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer-${{ github.ref_name }}
-          path: |
-            dist/pomodoro-tray-timer/**
-            dist-installer/pomodoro-tray-timer-setup.exe
+          path: dist-installer/pomodoro-tray-timer-setup.exe
+          retention-days: 1
 
       - name: Create/Update GitHub Release and upload installer
         shell: pwsh
