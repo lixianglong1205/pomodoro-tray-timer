@@ -29,7 +29,9 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-uv sync --all-groups
+if [[ -z "${CI:-}" ]]; then
+  uv sync --all-groups
+fi
 
 uv run python -m nuitka \
   main.py \

@@ -13,9 +13,11 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
+build = [
     "nuitka>=4.0.5",
     "pillow>=11.0.0",
+]
+dev = [
     "ruff>=0.11.0",
     "mypy>=1.15.0",
     "pytest>=9.0.3",

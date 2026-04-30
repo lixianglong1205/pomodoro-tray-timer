@@ -251,10 +251,12 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
-dev = [
-    { name = "mypy" },
+build = [
     { name = "nuitka" },
     { name = "pillow" },
+]
+dev = [
+    { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-qt" },
     { name = "ruff" },
@@ -270,10 +272,12 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.15.0" },
+build = [
     { name = "nuitka", specifier = ">=4.0.5" },
     { name = "pillow", specifier = ">=11.0.0" },
+]
+dev = [
+    { name = "mypy", specifier = ">=1.15.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-qt", specifier = ">=4.5.0" },
     { name = "ruff", specifier = ">=0.11.0" },
