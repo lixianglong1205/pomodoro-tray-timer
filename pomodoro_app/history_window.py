@@ -22,8 +22,12 @@ from .i18n import _
 from .models import CSV_HEADER, SessionRecord
 from .storage_csv import CsvStorage, DailyStats
 
-_RECORD_HEADERS = [_("日期"), _("集中精力"), _("短暂休息"), _("长休息"), _("开始时间"), _("结束时间")]
-_STATS_HEADERS = [_("日期"), _("专注时钟数"), _("专注总分钟")]
+_RECORD_HEADER_KEYS = ["日期", "集中精力", "短暂休息", "长休息", "开始时间", "结束时间"]
+_STATS_HEADER_KEYS = ["日期", "专注时钟数", "专注总分钟"]
+
+
+def _tr_headers(keys: list[str]) -> list[str]:
+    return [_(k) for k in keys]
 
 
 def _qdate_to_date(d: QDate) -> date:
@@ -115,7 +119,7 @@ class HistoryWindow(QDialog):
     def _build_records_table(self) -> QTableWidget:
         table = QTableWidget()
         table.setColumnCount(len(CSV_HEADER))
-        table.setHorizontalHeaderLabels(_RECORD_HEADERS)
+        table.setHorizontalHeaderLabels(_tr_headers(_RECORD_HEADER_KEYS))
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -126,7 +130,7 @@ class HistoryWindow(QDialog):
     def _build_stats_table(self) -> QTableWidget:
         table = QTableWidget()
         table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(_STATS_HEADERS)
+        table.setHorizontalHeaderLabels(_tr_headers(_STATS_HEADER_KEYS))
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
