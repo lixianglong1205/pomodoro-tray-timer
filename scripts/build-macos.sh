@@ -39,6 +39,7 @@ uv run python -m nuitka \
   --enable-plugins=pyside6 \
   --assume-yes-for-downloads \
   --disable-console \
+  --include-data-files="pomodoro_app/i18n/*.json=pomodoro_app/i18n/" \
   --macos-create-app-bundle \
   --macos-app-icon="assets/icon-red-tomato.icns" \
   --output-dir="$OUTPUT_DIR" \
