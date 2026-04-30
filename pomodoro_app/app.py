@@ -168,6 +168,8 @@ def run() -> int:
     def on_language_changed(_lang: str) -> None:
         if history is not None:
             history.retranslate_ui()
+        if settings is not None:
+            settings.retranslate_ui()
 
     engine.language_changed.connect(on_language_changed)
 
