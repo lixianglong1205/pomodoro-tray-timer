@@ -4,6 +4,8 @@
 
 支持 **6 种语言**运行时切换（中文、英文、日文、俄文、法文、德文）。
 
+> 🍅 由 **[嗨AI助手](https://hiaipal.com)** 出品 — 你最真诚的 AI 伙伴。关注微信公众号，获取更多实用工具动态。
+
 ---
 
 ## 整体架构
@@ -45,17 +47,17 @@ main.py (入口)
 
 ### 右键菜单
 
-| 菜单项 | 说明 |
-|--------|------|
-| 暂停 / 继续 | 文案随状态动态切换 |
-| 终止时钟 | 运行中可用；在休息中终止后 pending 保留该休息，下次左键会重开 |
-| 开始集中精力 | — |
-| 开始短暂休息 | — |
-| 开始长时间休息 | — |
-| 重新开始番茄钟循环 | 重置周期计数器 |
-| 打开历史记录 | — |
-| 设置... | — |
-| 退出 | — |
+| 菜单项             | 说明                                                          |
+| ------------------ | ------------------------------------------------------------- |
+| 暂停 / 继续        | 文案随状态动态切换                                            |
+| 终止时钟           | 运行中可用；在休息中终止后 pending 保留该休息，下次左键会重开 |
+| 开始集中精力       | —                                                            |
+| 开始短暂休息       | —                                                            |
+| 开始长时间休息     | —                                                            |
+| 重新开始番茄钟循环 | 重置周期计数器                                                |
+| 打开历史记录       | —                                                            |
+| 设置...            | —                                                            |
+| 退出               | —                                                            |
 
 ### macOS 特别说明
 
@@ -76,11 +78,11 @@ main.py (入口)
 
 阶段结束时通知内容按阶段区分：
 
-| 阶段 | 标题 |
-|------|------|
-| 专注结束 | "第{n}/{total}次集中精力" |
-| 短暂休息结束 | "短暂休息结束" |
-| 长休息结束 | "长休息结束" |
+| 阶段         | 标题                      |
+| ------------ | ------------------------- |
+| 专注结束     | "第{n}/{total}次集中精力" |
+| 短暂休息结束 | "短暂休息结束"            |
+| 长休息结束   | "长休息结束"              |
 
 每则通知同时提示下一阶段建议（"下一阶段：集中精力" / "短暂休息" / "长时间休息"）。
 
@@ -134,8 +136,8 @@ focus/short_break/long_break --[stop]--> idle
 
 ### 支持语言
 
-| 代码 | 语言 |
-|------|------|
+| 代码   | 语言 |
+| ------ | ---- |
 | `zh` | 中文 |
 | `en` | 英文 |
 | `ja` | 日文 |
@@ -159,13 +161,13 @@ focus/short_break/long_break --[stop]--> idle
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `focus_minutes` | 正整数 | 专注分钟数 |
-| `short_break_minutes` | 正整数 | 短暂休息分钟数 |
-| `long_break_minutes` | 正整数 | 长休息分钟数 |
-| `long_break_every_focus` | 正整数 | 每完成 n 次专注触发一次长休息 |
-| `language` | 2 字符语言代码 | 界面语言，默认 `"zh"` |
+| 字段                       | 类型           | 说明                          |
+| -------------------------- | -------------- | ----------------------------- |
+| `focus_minutes`          | 正整数         | 专注分钟数                    |
+| `short_break_minutes`    | 正整数         | 短暂休息分钟数                |
+| `long_break_minutes`     | 正整数         | 长休息分钟数                  |
+| `long_break_every_focus` | 正整数         | 每完成 n 次专注触发一次长休息 |
+| `language`               | 2 字符语言代码 | 界面语言，默认`"zh"`        |
 
 - 配置文件不存在或格式无效时回退默认值（25/5/15/4/zh）
 - 保存前会校验所有字段，避免写入坏数据
@@ -194,11 +196,11 @@ focus/short_break/long_break --[stop]--> idle
 
 ### 数据目录策略
 
-| 平台 | 默认数据目录 |
-|------|-------------|
-| **macOS** | `~/Library/Application Support/pomodoro-tray-timer/` |
-| **Windows** | `%APPDATA%\pomodoro-tray-timer\` |
-| **Linux** | `$XDG_DATA_HOME/pomodoro-tray-timer/` 或 `~/.local/share/pomodoro-tray-timer/` |
+| 平台              | 默认数据目录                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------- |
+| **macOS**   | `~/Library/Application Support/pomodoro-tray-timer/`                             |
+| **Windows** | `%APPDATA%\pomodoro-tray-timer\`                                                 |
+| **Linux**   | `$XDG_DATA_HOME/pomodoro-tray-timer/` 或 `~/.local/share/pomodoro-tray-timer/` |
 
 - 可通过 `settings.ini` 中的 `[app]` → `DataDir` 自定义数据目录（所有平台均支持）
 - 程序启动时自动做**一次性旧数据迁移**：将 `data/` 目录（旧版本）中的 `config.json` / `history.csv` 迁移到新位置
@@ -232,11 +234,11 @@ uv run pytest
 
 测试文件：
 
-| 文件 | 测试内容 |
-|------|---------|
-| `tests/test_i18n.py` | Translator 单例、语言切换、未翻译回退 |
-| `tests/test_tray_i18n.py` | 托盘菜单语言切换后文字正确性 |
-| `tests/test_history_i18n.py` | 历史窗口语言切换（含往返切换） |
+| 文件                           | 测试内容                              |
+| ------------------------------ | ------------------------------------- |
+| `tests/test_i18n.py`         | Translator 单例、语言切换、未翻译回退 |
+| `tests/test_tray_i18n.py`    | 托盘菜单语言切换后文字正确性          |
+| `tests/test_history_i18n.py` | 历史窗口语言切换（含往返切换）        |
 
 ---
 
@@ -262,6 +264,7 @@ CI 工作流：`.github/workflows/release-windows.yml`（`v*` tag 触发）
 ### 分平台 lock 文件
 
 项目维护分平台 `uv.lock`：
+
 - `uv.lock.macos`
 - `uv.lock.windows`
 
@@ -288,3 +291,30 @@ CI 按平台自动选择对应 lock 进行 `uv sync --all-groups`。
 - `installer/` — Inno Setup 安装器脚本
 - `assets/` — 静态图标资源
 - `tests/` — 单元测试
+
+---
+
+## 关于嗨AI助手
+
+「**[嗨AI助手](https://github.com/lixianglong1205/)**」是作者维护的个人 IP，真实记录 AI 打磨产品全过程，分享最实用工具动态。你出点子，我来开发，上线就送！
+
+### 关注微信公众号
+
+扫码关注「嗨AI助手」微信公众号，获取更多实用工具动态和免费额度：
+
+<p align="center">
+  <picture>
+    <source srcset="assets/wechat-channels-qrcode.7c110a33.webp" type="image/webp" />
+    <img src="assets/wechat-channels-qrcode.aafdf212.jpg" alt="嗨AI助手微信公众号二维码" width="220" height="220" />
+  </picture>
+</p>
+
+### 支持作者
+
+如果这个番茄钟工具帮你提升了效率，欢迎请作者喝杯咖啡 ☕️ 你的支持是持续维护和开发新功能的最大动力！
+
+<p align="center">
+  <img src="assets/wechat-reward.jpg" alt="微信赞赏码" width="220" height="220" />
+</p>
+
+> 🌐 官网：[https://hiaipal.com](https://hiaipal.com)
